@@ -44,9 +44,10 @@ namespace layers {
         const int    m_inputWeightsPerBlock;
         const int    m_internalWeightsPerBlock;
         const real_t m_bias;
-        const real_t m_learningRate;
+	// FIX ME
+        const real_t m_learningRate = 1;
 
-        //real_vector m_outputErrors;
+        real_vector m_outputErrors;
         real_vector m_weights;
         real_vector m_weightUpdates;
 
@@ -109,7 +110,7 @@ namespace layers {
          *
          * @return The output error
          */
-        //real_vector& outputErrors();
+        real_vector& outputErrors();
 
         /**
          * Returns the current weights
