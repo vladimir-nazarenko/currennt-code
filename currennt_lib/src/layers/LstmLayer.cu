@@ -44,6 +44,8 @@ namespace {
     typedef activation_functions::Tanh     cell_input_act_fn_t;
     typedef activation_functions::Tanh     cell_output_act_fn_t;
 
+    // Given the activations of all three gates, previous cell state, biases and bias weights.
+    // functor computes the outputs of the cell and updates the cell state
     struct ComputeBlockOutputFn
     {
         int    effLayerSize;
@@ -529,6 +531,7 @@ namespace layers {
             throw std::runtime_error("Cannot create a bidirectional layer with an odd layer size");
 
         // set raw pointers
+        // for bidirectional layer it's 2xsize
         int ls  = this->size();
         int pls = this->precedingLayer().size();
 
@@ -553,11 +556,18 @@ namespace layers {
             // cell states, niags, deltas, ...
             Cpu::real_vector tmp(this->outputs().size() / (m_isBidirectional ? 2 : 1), 0);
 
+            // As far as I guess, both branches do the same thing if the layer
+            // is biderectional, but second branch fails because of dimension
+            // mismatch
             if (m_isBidirectional) {
                 fwbw->tmpOutputs      = tmp;
                 fwbw->tmpOutputErrors = tmp;
             }
             else {
+                // I don't get the difference between _outputs and outputs
+                // seems like they do the same thing in this case,
+                // but _outputs is defined as protected function on Layer
+                // while outputs may be reimplemented in children classes
                 fwbw->tmpOutputs     .swap(this->_outputs());
                 fwbw->tmpOutputErrors.swap(this->outputErrors());
             }
@@ -618,6 +628,8 @@ namespace layers {
             }
         }
 
+        // Do not see any purpose in this code
+        // Seems like duplicate of the code above
         if (!m_isBidirectional) {
             m_fw.tmpOutputs     .swap(this->_outputs());
             m_fw.tmpOutputErrors.swap(this->outputErrors());
@@ -763,6 +775,8 @@ namespace layers {
     template <typename TDevice>
     void LstmLayer<TDevice>::computeForwardPass()
     {
+        // No idea how it is supposed to work
+        // swap just makes a deep copy and has nothing to do with output redirection
         // for unidirectional LSTM, we can write the outputs directly in the layer output vector
         if (!m_isBidirectional) {
             m_fw.tmpOutputs.swap(this->_outputs());
@@ -873,6 +887,8 @@ namespace layers {
             fn.fwOutputs    = helpers::getRawPointer(m_fw.tmpOutputs);
             fn.bwOutputs    = helpers::getRawPointer(m_bw.tmpOutputs);
 
+            // gets elements from the first iterator (params 1 and 2),
+            // applies the fn and writes the result to the second one
             thrust::transform(
                 thrust::counting_iterator<int>(0),
                 thrust::counting_iterator<int>(0) + this->curMaxSeqLength() * this->parallelSequences() * this->size(),

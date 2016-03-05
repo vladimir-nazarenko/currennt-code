@@ -33,6 +33,8 @@ namespace layers {
      * Represents a fully connected layer which uses LSTM cells with forget gates, peephole
      * connections and one cell per block
      *
+     * clear explanation of the weights of the lstm cell is at http://colah.github.io/posts/2015-08-Understanding-LSTMs/
+     *
      * weights; with P = precedingLayer().size() and L = size():
      *    ~ weights from preceding layer:
      *        - [0 .. PL-1]:    net input
