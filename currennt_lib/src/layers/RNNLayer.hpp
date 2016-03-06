@@ -17,7 +17,7 @@ namespace layers {
  * @param TDevice The computation device (Cpu or Gpu)
  *********************************************************************************************/
     template <typename TDevice>
-    class RNNLayer: TrainableLayer<TDevice>
+    class RNNLayer: public TrainableLayer<TDevice>
     {
         typedef typename TDevice::real_vector real_vector;
 
@@ -53,6 +53,7 @@ namespace layers {
             helpers::Matrix<TDevice> igDeltasMatrix;
             helpers::Matrix<TDevice> ogActsMatrix;
             helpers::Matrix<TDevice> ogDeltasMatrix;
+            helpers::Matrix<TDevice> hiddenTmpOutputsMatrix;
 
             weight_matrices_t weightMatrices;
             weight_matrices_t weightUpdateMatrices;
@@ -69,14 +70,12 @@ namespace layers {
                 bool bidirectional
                 );
         const std::string &type() const;
-        real_vector &outputs();
         /**
          * Sets the values of local variables, inits activation matrices
          */
         void loadSequences(const data_sets::DataSetFraction &fraction);
         void computeForwardPass();
         void computeBackwardPass();
-        void exportLayer(const helpers::JsonValue &layersArray, const helpers::JsonAllocator &allocator) const;
 
     private:
         forward_backward_info_t m_fw;

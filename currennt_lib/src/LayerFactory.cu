@@ -33,6 +33,7 @@
 #include "layers/WeightedSsePostOutputLayer.hpp"
 #include "layers/BinaryClassificationLayer.hpp"
 #include "layers/MulticlassClassificationLayer.hpp"
+#include "layers/RNNLayer.hpp"
 #include "activation_functions/Tanh.cuh"
 #include "activation_functions/Logistic.cuh"
 #include "activation_functions/Identity.cuh"
@@ -63,6 +64,10 @@ layers::Layer<TDevice>* LayerFactory<TDevice>::createLayer(
     	return new LstmLayer<TDevice>(layerChild, weightsSection, *precedingLayer, false);
     else if (layerType == "blstm")
     	return new LstmLayer<TDevice>(layerChild, weightsSection, *precedingLayer, true);
+    else if (layerType == "rnn")
+        return new RNNLayer<TDevice>(layerChild, weightsSection, *precedingLayer, false);
+    else if (layerType == "brnn")
+        return new RNNLayer<TDevice>(layerChild, weightsSection, *precedingLayer, true);
     else if (layerType == "sse" || layerType == "weightedsse" || layerType == "rmse" || layerType == "ce" || layerType == "wf" || layerType == "binary_classification" || layerType == "multiclass_classification") {
         //layers::TrainableLayer<TDevice>* precedingTrainableLayer = dynamic_cast<layers::TrainableLayer<TDevice>*>(precedingLayer);
         //if (!precedingTrainableLayer)

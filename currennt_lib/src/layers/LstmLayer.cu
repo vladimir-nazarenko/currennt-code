@@ -162,6 +162,10 @@ namespace {
         }
     };
 
+    // this functor gets the value and index and stores the value in one of vectors for errors:
+    // one for forward state and another for backward according to the following layout.
+    // The values of the forward and backward states are mingled so the second timestep of forward errors
+    // goes after the first timestep of backward errors.
     struct ResortOutputErrorsFn
     {
         int layerSize;
