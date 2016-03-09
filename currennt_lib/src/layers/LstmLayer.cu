@@ -44,8 +44,10 @@ namespace {
     typedef activation_functions::Tanh     cell_input_act_fn_t;
     typedef activation_functions::Tanh     cell_output_act_fn_t;
 
-    // Given the activations of all three gates, previous cell state, biases and bias weights.
-    // functor computes the outputs of the cell and updates the cell state
+    /**
+     * Gets the info about the layer such as layer size and layout, all the weights and activations
+     * and computes the output on the given index
+     */
     struct ComputeBlockOutputFn
     {
         int    effLayerSize;
@@ -69,13 +71,20 @@ namespace {
         real_t *fgActs;
         real_t *ogActs;
 
+        /**
+         * @param[in] outputIdx Index of the output to compute
+         * @param[in] t First  element indicates that we call function with outputIdx of the _first_ timestep
+         *              Second element indicates that we can skip checking that there is an element in the sequence
+         *              to produce output on the given index. Basically this value indicates that for every loaded sequence
+         *              there is an output on the given index.
+         */
         __host__ __device__ real_t operator() (const int &outputIdx, const thrust::tuple<bool, bool> &t) const
         {
             // unpack the tuple
             bool firstCall    = t.get<0>();
             bool checkPatType = t.get<1>();
 
-            // check if we can skip the whole calculation because the pattern is a dummy
+            // check if we can skip the whole calculation because the pattern is a dummy (not present in the sequence)
             // in that case, we set the all values of that pattern to zero
             if (checkPatType) {
                 int patIdx = outputIdx / effLayerSize;
@@ -86,7 +95,8 @@ namespace {
                 }
             }
 
-            // calculate indices
+            // All the outputs of all the timesteps are stored in one vector.
+            // Hence we introduce the blockIdx, which is the index of the element in the timestep
             int blockIdx = outputIdx % effLayerSize;
 
             // load the niag activations
@@ -139,6 +149,10 @@ namespace {
         }
     };
 
+    /**
+     * Gets two vectors with outputs from forward and backward directions and merges them into one vector
+     * such that frames of the backward outputs alternate with the ones of the forward outputs. Forward frame comes first.
+     */
     struct ResortOutputsFn
     {
         int layerSize;
@@ -162,10 +176,11 @@ namespace {
         }
     };
 
-    // this functor gets the value and index and stores the value in one of vectors for errors:
-    // one for forward state and another for backward according to the following layout.
-    // The values of the forward and backward states are mingled so the second timestep of forward errors
-    // goes after the first timestep of backward errors.
+    /**
+     * This functor gets the value and index and stores the value in one of vectors for errors:
+     * one for forward output errors and another for backward according to the layout.
+     * @see ResortOutputsFn for layout details.
+    */
     struct ResortOutputErrorsFn
     {
         int layerSize;
@@ -193,6 +208,10 @@ namespace {
         }
     };
 
+
+    /**
+     * Computes the derivatives of the outputs
+     */
     struct ComputeBlockErrorsFn
     {
         int effLayerSize;
@@ -249,10 +268,12 @@ namespace {
             real_t cellState = cellStates  [outputIdx];
 
             // calculate the output gate delta
+            // it's basically the derivative of the output by ogAct, multiplied by outputErr
             real_t ogDelta = gate_act_fn_t::deriv(ogAct) * cell_output_act_fn_t::fn(cellState) * outputErr;
 
             // calculate the cell state error
             real_t ogPeepWeight = ogPeepWeights[blockIdx];
+            // TODO: CHECK if there should be the derivative at the cell state
             real_t cellStateErr = ogAct * cell_output_act_fn_t::deriv(cell_output_act_fn_t::fn(cellState)) * outputErr + ogPeepWeight * ogDelta;
 
             if (!firstCall) {
@@ -284,6 +305,7 @@ namespace {
             real_t igDelta = gate_act_fn_t::deriv(igAct) * niAct * cellStateErr;
 
             // store the niag deltas and the cell state error
+            // TODO: Do we need this code?
             niDeltas       [outputIdx] = helpers::limitedError(niDelta);
             igDeltas       [outputIdx] = helpers::limitedError(igDelta);
             fgDeltas       [outputIdx] = helpers::limitedError(fgDelta);

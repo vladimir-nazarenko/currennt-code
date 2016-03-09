@@ -54,12 +54,29 @@ namespace {
         }
     };
 
-    struct ComputeBlockOutputFn {
-        const real_t *outActs;
+    struct ComputeBlockErrorsFn {
+        int effLayerSize;
+        int prevOutputDistance;
 
-        __host__ __device__ real_t operator() (const int &outputIdx) {
-            return output_act_fn_t::fn(outActs[outputIdx]);
+        const real_t *hiddenDeltas;
+//        const real_t *   outActs;
+
+        real_t *niDeltas;
+        real_t *outDeltas;
+
+        __host__ __device__ void operator() (const thrust::tuple<const real_t &, int> &t) const
+        {
+            real_t outputErr = t.get<0>();
+            real_t outputIdx = t.get<1>();
+
+//            real_t outAct = outActs[outputIdx];
+
+//            real_t outDelta = output_act_fn_t::deriv(outAct) * outputErr;
+
+
         }
+
+
     };
 }
 }
@@ -206,15 +223,15 @@ void RNNLayer<TDevice>::computeForwardPass()
         }
 
         // compute outputs
-        m_fw.ogActsMatrix.assignProduct(m_fw.weightMatrices.ogInternal, true, m_fw.hiddenTmpOutputsMatrix, false);
-        internal::ComputeBlockOutputFn fnOut;
-        fnOut.outActs = helpers::getRawPointer(m_fw.ogActs);
-        thrust::transform(
-            thrust::counting_iterator<int>(0),
-            thrust::counting_iterator<int>((n + 1) * this->curMaxSeqLength()),
-            m_fw.tmpOutputs.begin(),
-            fnOut
-            );
+//        m_fw.ogActsMatrix.assignProduct(m_fw.weightMatrices.ogInternal, true, m_fw.hiddenTmpOutputsMatrix, false);
+//        internal::ComputeBlockOutputFn fnOut;
+//        fnOut.outActs = helpers::getRawPointer(m_fw.ogActs);
+//        thrust::transform(
+//            thrust::counting_iterator<int>(0),
+//            thrust::counting_iterator<int>((n + 1) * this->curMaxSeqLength()),
+//            m_fw.tmpOutputs.begin(),
+//            fnOut
+//            );
 
     }}
 
@@ -251,14 +268,14 @@ void RNNLayer<TDevice>::computeForwardPass()
 
         // compute outputs
         m_bw.ogActsMatrix.assignProduct(m_bw.weightMatrices.ogInternal, true, m_bw.hiddenTmpOutputsMatrix, false);
-        internal::ComputeBlockOutputFn fnOut;
-        fnOut.outActs = helpers::getRawPointer(m_bw.ogActs);
-        thrust::transform(
-            thrust::counting_iterator<int>(0),
-            thrust::counting_iterator<int>((n + 1) * this->curMaxSeqLength()),
-            m_bw.tmpOutputs.begin(),
-            fnOut
-            );
+//        internal::ComputeBlockOutputFn fnOut;
+//        fnOut.outActs = helpers::getRawPointer(m_bw.ogActs);
+//        thrust::transform(
+//            thrust::counting_iterator<int>(0),
+//            thrust::counting_iterator<int>((n + 1) * this->curMaxSeqLength()),
+//            m_bw.tmpOutputs.begin(),
+//            fnOut
+//            );
         }
 }
 

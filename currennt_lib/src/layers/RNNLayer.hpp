@@ -9,7 +9,8 @@ namespace layers {
 
 
 /******************************************************************************************//**
- * weights; with P = precedingLayer().size() and L = size():
+ * TODO: CHECK ME!
+ * weights; with P = precedingLayer().size() and L = size()
  *    ~ weights from preceding layer:
  *        - [0 .. PL-1]:    input weights
  *        - [PL .. PL+LL-1]:  recurrent weights

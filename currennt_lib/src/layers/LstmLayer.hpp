@@ -61,8 +61,14 @@ namespace layers {
     template <typename TDevice>
     class LstmLayer : public TrainableLayer<TDevice>
     {
+        /**
+         * Represents the real vector allocated either on Cpu or on Gpu.
+         */
         typedef typename TDevice::real_vector real_vector;
 
+        /**
+         * Represents all the weight matrices for lstm layer. While internal weights map preceding state to activation, input weights map the input vector.
+         */
         struct weight_matrices_t {
             helpers::Matrix<TDevice> niInput;
             helpers::Matrix<TDevice> igInput;
@@ -74,6 +80,10 @@ namespace layers {
             helpers::Matrix<TDevice> ogInternal;
         };
 
+        /** Represents the matrices of each timestep. Matrices for each gate (two for input gate, see http://colah.github.io/posts/2015-08-Understanding-LSTMs/)
+         *  and matrices for outputs on each timestep.
+         * All timestep matrices share the one vector as a storage. See constructor for futher details.
+         */
         struct timestep_matrices_t {
             helpers::Matrix<TDevice> tmpOutputs;
             helpers::Matrix<TDevice> tmpOutputErrors;
@@ -87,6 +97,10 @@ namespace layers {
             helpers::Matrix<TDevice> ogDeltas;
         };
 
+        /**
+         * Contains the storage of timestep matrices for one direction of lstm layer
+         * and matrices representing all the time steps at once and some other self-explaining fields
+         */
         struct forward_backward_info_t {
             real_vector tmpOutputs;
             real_vector tmpOutputErrors;
@@ -129,6 +143,9 @@ namespace layers {
         forward_backward_info_t m_fw;
         forward_backward_info_t m_bw;
 
+        /**
+         * Contatins all the outputs of the preceding layer for all timesteps and all the parallel sequences.
+         */
         helpers::Matrix<TDevice> m_precLayerOutputsMatrix;
 
     public:
