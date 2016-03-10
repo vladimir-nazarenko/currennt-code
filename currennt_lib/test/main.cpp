@@ -1,48 +1,29 @@
 #include <gtest/gtest.h>
-//#include "../src/layers/LstmLayer.hpp"
 #include "../src/helpers/Matrix.hpp"
 #include "../src/Types.hpp"
 
 using namespace helpers;
 
-//class MatrixTest<TDevice> : public ::testing::Test {
-//    typedef ::testing::Types<Cpu, Gpu> MyTypes;
-//private:
-//    Matrix<TypeParam> m1;
-//public:
-//    MatrixTest() {
-//        TDevice::int_vector vec(4, 1);
-////        m1 = Matrix<Cpu>(&vec, 2, 2);
-//    }
 
-//    virtual ~MatrixTest() {
-
-//    }
-
-//    int r5() {
-//        return 5;
-//    }
-//};
-
-//TYPED_TEST(Matrix, multiplicate) {
-//    Ma
-//}
-
-//template <class TDevice>
-//struct weight_matrices_t {
-//    helpers::Matrix<TDevice> niInput;
-//    helpers::Matrix<TDevice> igInput;
-//    helpers::Matrix<TDevice> fgInput;
-//    helpers::Matrix<TDevice> ogInput;
-//    helpers::Matrix<TDevice> niInternal;
-//    helpers::Matrix<TDevice> igInternal;
-//    helpers::Matrix<TDevice> fgInternal;
-//    helpers::Matrix<TDevice> ogInternal;
-//};
+TEST(Matrix, multiplication) {
+    int N = 10;
+    Cpu::real_vector vec(N, 1);
+    for(int i = 0; i < N; ++i)
+        vec[i] = i;
+    Cpu::real_vector vec1(N, 1);
+    for(int i = 0; i < N; ++i)
+        vec1[i] = i;
+    Cpu::real_vector vec2(4, 1);
+    Matrix<Cpu> m(&vec, 2, 5);
+    Matrix<Cpu> m1(&vec1, 5, 2);
+    Matrix<Cpu> res(&vec2, 2, 2);
+    res.assignProduct(m, false, m1, false);
+    float exp[] = {60, 70, 160, 195};
+    std::vector<float> expected(exp, exp + sizeof(exp) * sizeof(float));
+    ASSERT_TRUE(std::equal(vec2.begin(), vec2.end(), expected.begin()));
+}
 
 int main(int argc, char **argv) {
     testing::InitGoogleTest(&argc, argv);
-//    Matrix<Gpu> m;
-//    weight_matrices_t<Gpu> wm;
     return RUN_ALL_TESTS();
 }

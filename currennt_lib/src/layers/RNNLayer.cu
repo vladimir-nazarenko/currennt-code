@@ -110,8 +110,6 @@ RNNLayer<TDevice>::RNNLayer(const helpers::JsonValue &layerChild, const helpers:
         fwbw->igActs           = tmp;
         fwbw->igDeltas         = tmp;
         fwbw->igActs           = tmp;
-        fwbw->ogActs           = tmp;
-        fwbw->ogDeltas         = tmp;
 
         weight_matrices_t *wmArr[] = { &fwbw->weightMatrices, &fwbw->weightUpdateMatrices };
         real_vector*       wtsArr[] = { &this->weights(),      &this->_weightUpdates() };
@@ -142,9 +140,7 @@ RNNLayer<TDevice>::RNNLayer(const helpers::JsonValue &layerChild, const helpers:
             tm.hiddenTmpErrors  = helpers::Matrix<TDevice>(&fwbw->hiddenTmpErrors, rows, cols, offset);
             tm.hiddenTmpOutputs = helpers::Matrix<TDevice>(&fwbw->hiddenTmpOutputs,rows, cols, offset);
             tm.igActs           = helpers::Matrix<TDevice>(&fwbw->igActs,          rows, cols, offset);
-            tm.ogActs           = helpers::Matrix<TDevice>(&fwbw->ogActs,          rows, cols, offset);
             tm.igDeltas         = helpers::Matrix<TDevice>(&fwbw->igDeltas,        rows, cols, offset);
-            tm.ogDeltas         = helpers::Matrix<TDevice>(&fwbw->ogDeltas,        rows, cols, offset);
 
             fwbw->timestepMatrices.push_back(tm);
         }
@@ -168,7 +164,7 @@ void RNNLayer<TDevice>::loadSequences(const data_sets::DataSetFraction &fraction
 
     // Don't understand how this thing is supposed to work
     // Previous layer should not be aware that we train our network
-    // on sequences. Or maybe it is?
+    // on sequences. Or maybe it is? -- Well, it is.
     m_precedingLayerOutputMatrix = helpers::Matrix<TDevice>(&this->precedingLayer().outputs(), this->precedingLayer().size(), this->curMaxSeqLength() * this->parallelSequences());
 
     forward_backward_info_t* fwbwArr[] = { &m_fw, &m_bw };
@@ -178,11 +174,11 @@ void RNNLayer<TDevice>::loadSequences(const data_sets::DataSetFraction &fraction
         int rows = this->size() / (m_isBidirectional ? 2 : 1);
         int cols = this->curMaxSeqLength() * this->parallelSequences();
 
-        fwbw->igActsMatrix = helpers::Matrix<TDevice>(&fwbw->igActs, rows, cols);
-        fwbw->ogActsMatrix = helpers::Matrix<TDevice>(&fwbw->ogActs, rows, cols);
+        fwbw->igActsMatrix           = helpers::Matrix<TDevice>(&fwbw->igActs, rows, cols);
+        fwbw->hiddenTmpOutputsMatrix = helpers::Matrix<TDevice>(&fwbw->hiddenTmpOutputs, rows, cols);
 
-        fwbw->igDeltasMatrix = helpers::Matrix<TDevice>(&fwbw->igDeltas, rows, cols);
-        fwbw->ogDeltasMatrix = helpers::Matrix<TDevice>(&fwbw->ogDeltas, rows, cols);
+        fwbw->igDeltasMatrix        = helpers::Matrix<TDevice>(&fwbw->igDeltas, rows, cols);
+        fwbw->hiddenTmpDeltasMatrix = helpers::Matrix<TDevice>(&fwbw->hiddenTmpErrors, rows, cols);
     }
 }
 
@@ -267,7 +263,7 @@ void RNNLayer<TDevice>::computeForwardPass()
         }
 
         // compute outputs
-        m_bw.ogActsMatrix.assignProduct(m_bw.weightMatrices.ogInternal, true, m_bw.hiddenTmpOutputsMatrix, false);
+//        m_bw.ogActsMatrix.assignProduct(m_bw.weightMatrices.ogInternal, true, m_bw.hiddenTmpOutputsMatrix, false);
 //        internal::ComputeBlockOutputFn fnOut;
 //        fnOut.outActs = helpers::getRawPointer(m_bw.ogActs);
 //        thrust::transform(

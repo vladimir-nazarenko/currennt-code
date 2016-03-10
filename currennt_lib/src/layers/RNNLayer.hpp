@@ -36,8 +36,8 @@ namespace layers {
             helpers::Matrix<TDevice> hiddenTmpErrors;
             helpers::Matrix<TDevice> igActs;
             helpers::Matrix<TDevice> igDeltas;
-            helpers::Matrix<TDevice> ogActs;
-            helpers::Matrix<TDevice> ogDeltas;
+//            helpers::Matrix<TDevice> ogActs;
+//            helpers::Matrix<TDevice> ogDeltas;
         };
 
         struct forward_backward_info_t {
@@ -47,14 +47,15 @@ namespace layers {
             real_vector hiddenTmpErrors;
             real_vector igActs;
             real_vector igDeltas;
-            real_vector ogActs;
-            real_vector ogDeltas;
+//            real_vector ogActs;
+//            real_vector ogDeltas;
 
             helpers::Matrix<TDevice> igActsMatrix;
             helpers::Matrix<TDevice> igDeltasMatrix;
-            helpers::Matrix<TDevice> ogActsMatrix;
-            helpers::Matrix<TDevice> ogDeltasMatrix;
+//            helpers::Matrix<TDevice> ogActsMatrix;
+//            helpers::Matrix<TDevice> ogDeltasMatrix;
             helpers::Matrix<TDevice> hiddenTmpOutputsMatrix;
+            helpers::Matrix<TDevice> hiddenTmpDeltasMatrix;
 
             weight_matrices_t weightMatrices;
             weight_matrices_t weightUpdateMatrices;
