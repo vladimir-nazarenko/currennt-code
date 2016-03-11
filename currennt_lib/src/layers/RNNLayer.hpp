@@ -26,18 +26,18 @@ namespace layers {
         struct weight_matrices_t {
             helpers::Matrix<TDevice> igInput;
             helpers::Matrix<TDevice> igInternal;
-            helpers::Matrix<TDevice> ogInternal;
+            helpers::Matrix<TDevice> ogOutput;
         };
 
         struct timestep_matrices_t {
-            helpers::Matrix<TDevice> tmpOutputs;
-            helpers::Matrix<TDevice> tmpOutputErrors;
-            helpers::Matrix<TDevice> hiddenTmpOutputs;
-            helpers::Matrix<TDevice> hiddenTmpErrors;
             helpers::Matrix<TDevice> igActs;
             helpers::Matrix<TDevice> igDeltas;
-//            helpers::Matrix<TDevice> ogActs;
-//            helpers::Matrix<TDevice> ogDeltas;
+            helpers::Matrix<TDevice> hiddenTmpOutputs;
+            helpers::Matrix<TDevice> hiddenTmpErrors;
+            helpers::Matrix<TDevice> ogActs;
+            helpers::Matrix<TDevice> ogDeltas;
+            helpers::Matrix<TDevice> tmpOutputs;
+            helpers::Matrix<TDevice> tmpOutputErrors;
         };
 
         struct forward_backward_info_t {
@@ -47,13 +47,13 @@ namespace layers {
             real_vector hiddenTmpErrors;
             real_vector igActs;
             real_vector igDeltas;
-//            real_vector ogActs;
-//            real_vector ogDeltas;
+            real_vector ogActs;
+            real_vector ogDeltas;
 
             helpers::Matrix<TDevice> igActsMatrix;
             helpers::Matrix<TDevice> igDeltasMatrix;
-//            helpers::Matrix<TDevice> ogActsMatrix;
-//            helpers::Matrix<TDevice> ogDeltasMatrix;
+            helpers::Matrix<TDevice> ogActsMatrix;
+            helpers::Matrix<TDevice> ogDeltasMatrix;
             helpers::Matrix<TDevice> hiddenTmpOutputsMatrix;
             helpers::Matrix<TDevice> hiddenTmpDeltasMatrix;
 
