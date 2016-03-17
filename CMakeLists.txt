@@ -1,4 +1,4 @@
-PROJECT(currennt)
+PROJECT(currennt_bin)
 
 CMAKE_MINIMUM_REQUIRED (VERSION 2.8)
 
@@ -19,7 +19,7 @@ FILE (GLOB_RECURSE src_lib     currennt_lib/src/*.cpp currennt_lib/src/*.hpp    
 FILE (GLOB_RECURSE src_trainer currennt/*.cpp     currennt/*.hpp         currennt/*.h         currennt/*.cu         currennt/*.cuh)
 
 CUDA_ADD_EXECUTABLE (${PROJECT_NAME} ${src_lib} ${src_trainer})
-cuda_add_executable(runTests ${src_lib} currennt_lib/test/main.cpp)
+cuda_add_executable(runTests         ${src_lib} currennt_lib/test/main.cpp)
 
 CUDA_ADD_CUBLAS_TO_TARGET (${PROJECT_NAME})
 TARGET_LINK_LIBRARIES (${PROJECT_NAME} netcdf)

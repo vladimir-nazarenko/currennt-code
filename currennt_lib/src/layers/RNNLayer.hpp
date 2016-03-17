@@ -14,7 +14,6 @@ namespace layers {
  *    ~ weights from preceding layer:
  *        - [0 .. PL-1]:    input weights
  *        - [PL .. PL+LL-1]:  recurrent weights
- *        - [PL + LL .. 2LL+PL-1]: output weigths
  * @param TDevice The computation device (Cpu or Gpu)
  *********************************************************************************************/
     template <typename TDevice>
@@ -26,7 +25,6 @@ namespace layers {
         struct weight_matrices_t {
             helpers::Matrix<TDevice> igInput;
             helpers::Matrix<TDevice> igInternal;
-            helpers::Matrix<TDevice> ogOutput;
         };
 
         struct timestep_matrices_t {
@@ -34,26 +32,16 @@ namespace layers {
             helpers::Matrix<TDevice> igDeltas;
             helpers::Matrix<TDevice> hiddenTmpOutputs;
             helpers::Matrix<TDevice> hiddenTmpErrors;
-            helpers::Matrix<TDevice> ogActs;
-            helpers::Matrix<TDevice> ogDeltas;
-            helpers::Matrix<TDevice> tmpOutputs;
-            helpers::Matrix<TDevice> tmpOutputErrors;
         };
 
         struct forward_backward_info_t {
-            real_vector tmpOutputs;
-            real_vector tmpOutputErrors;
             real_vector hiddenTmpOutputs;
             real_vector hiddenTmpErrors;
             real_vector igActs;
             real_vector igDeltas;
-            real_vector ogActs;
-            real_vector ogDeltas;
 
             helpers::Matrix<TDevice> igActsMatrix;
             helpers::Matrix<TDevice> igDeltasMatrix;
-            helpers::Matrix<TDevice> ogActsMatrix;
-            helpers::Matrix<TDevice> ogDeltasMatrix;
             helpers::Matrix<TDevice> hiddenTmpOutputsMatrix;
             helpers::Matrix<TDevice> hiddenTmpDeltasMatrix;
 
@@ -84,6 +72,7 @@ namespace layers {
         forward_backward_info_t m_bw;
         helpers::Matrix<TDevice> m_precedingLayerOutputMatrix;
         bool m_isBidirectional;
+        real_t *_rawBiasWeights;
     };
 
 }

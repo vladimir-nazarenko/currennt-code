@@ -285,6 +285,7 @@ namespace {
                 real_t igPeepWeight = igPeepWeights[blockIdx];
                 real_t fgPeepWeight = fgPeepWeights[blockIdx];
 
+                // Do not understand where the nextFgAct * nextCellStateErr term came from
                 cellStateErr += nextFgAct * nextCellStateErr + igPeepWeight * nextIgDelta + fgPeepWeight * nextFgDelta;
             }
 

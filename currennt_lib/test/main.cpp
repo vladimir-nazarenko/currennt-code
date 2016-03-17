@@ -1,6 +1,9 @@
 #include <gtest/gtest.h>
 #include "../src/helpers/Matrix.hpp"
 #include "../src/Types.hpp"
+#include "../src/layers/RNNLayer.hpp"
+
+
 
 using namespace helpers;
 
