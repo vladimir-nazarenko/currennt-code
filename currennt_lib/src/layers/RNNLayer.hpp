@@ -67,6 +67,8 @@ namespace layers {
         void computeForwardPass();
         void computeBackwardPass();
 
+        virtual ~RNNLayer();
+
     private:
         forward_backward_info_t m_fw;
         forward_backward_info_t m_bw;

@@ -256,12 +256,11 @@ namespace {
 
             real_t wu = 0;
             for (int i = 0; i < numPatterns; ++i) {
-//                wu += (offOutputs ? *offOutputs : bias) * *offDeltas;
+                wu += (offOutputs ? *offOutputs : bias) * *offDeltas;
 
                 offOutputs += offOutputsInc;
                 offDeltas  += effLayerSize;
             }
-            wu = *offDeltas;
 
             return wu;
         }
@@ -275,25 +274,28 @@ namespace layers {
 template <typename TDevice>
 RNNLayer<TDevice>::RNNLayer(const helpers::JsonValue &layerChild, const helpers::JsonValue &weightsSection, Layer<TDevice> &precedingLayer, bool bidirectional)
     : TrainableLayer<TDevice>(layerChild, weightsSection, 1 /* ls biases stored here */
-                                                        , helpers::safeJsonGetInt(layerChild, "size") / (bidirectional ? 1 : 2)
+                                                        , helpers::safeJsonGetInt(layerChild, "size") / (bidirectional ? 2 : 1)
                                                         , precedingLayer),
       m_isBidirectional(bidirectional)
 {
+
+    // calculate sizes
+    // previous layer size as defined by user
+    int pls = this->precedingLayer().size();
+    // current layer size as defined by user
+    // for bidirectional layer it's 2xsize
+    int ls  = this->size();
+    int els = this->size() / (m_isBidirectional ? 2 : 1);
+
+     _rawBiasWeights = helpers::getRawPointer(this->weights()) + ls * pls;
 
     forward_backward_info_t *fwbwArr[] = { &m_fw, &m_bw };
     for (int fwbwArrIdx = 0; fwbwArrIdx < (m_isBidirectional ? 2 : 1); ++fwbwArrIdx) {
         forward_backward_info_t *fwbw = fwbwArr[fwbwArrIdx];
 
-        // calculate sizes
-        // previous layer size as defined by user
-        int pls = this->precedingLayer().size();
-        // current layer size as defined by user
-        // for bidirectional layer it's 2xsize
-        int ls  = this->size();
-        int els = this->size() / (m_isBidirectional ? 2 : 1);
-
         Cpu::real_vector tmp(this->outputs().size() / (m_isBidirectional ? 2 : 1), 0);
 
+        // potentially error-prone
         // call copy constructor to initialize vectors
         fwbw->hiddenTmpErrors  = tmp;
         fwbw->hiddenTmpOutputs = tmp;
@@ -322,8 +324,6 @@ RNNLayer<TDevice>::RNNLayer(const helpers::JsonValue &layerChild, const helpers:
             wm->igInternal  = helpers::Matrix<TDevice>(wts, els, els, internalWeightsStart);
 
         }
-
-        _rawBiasWeights = helpers::getRawPointer(this->weights()) + ls * pls;
 
         // matrices for each timestep
         for (int timestep = 0; timestep < this->maxSeqLength(); ++timestep) {
@@ -380,7 +380,7 @@ void RNNLayer<TDevice>::loadSequences(const data_sets::DataSetFraction &fraction
 template <typename TDevice>
 void RNNLayer<TDevice>::computeForwardPass()
 {
-
+/*
     // sum up the activations from the preceding layer
     // forward states
     m_fw.igActsMatrix.assignProduct(m_fw.weightMatrices.igInput, true, m_precedingLayerOutputMatrix, false);
@@ -460,11 +460,12 @@ void RNNLayer<TDevice>::computeForwardPass()
     else {
         this->_outputs().swap(m_fw.hiddenTmpOutputs);
     }
+    */
 }
 
 template <typename TDevice>
 void RNNLayer<TDevice>::computeBackwardPass() {
-
+/*
     if (m_isBidirectional) {
         internal::ResortOutputErrorsFn fn;
         fn.layerSize      = this->size();
@@ -549,7 +550,7 @@ void RNNLayer<TDevice>::computeBackwardPass() {
             }
         }
     }}
-
+*/
     // compute the weight updates
     {{
         internal::ComputeWeightUpdateFn fn;
@@ -569,18 +570,29 @@ void RNNLayer<TDevice>::computeBackwardPass() {
         fn.bwIgDeltas            = helpers::getRawPointer(m_bw.igDeltas);
 
         thrust::transform(
-            thrust::counting_iterator<int>(0),
-            thrust::counting_iterator<int>(0) + (int)this->weightUpdates().size(),
-            this->_weightUpdates().begin(),
-            fn
-            );
+                    thrust::constant_iterator<int>(0),
+                    thrust::constant_iterator<int>(0) + this->_weightUpdates().size(),
+                    this->_weightUpdates().begin(),
+                    fn);
+//        thrust::transform(
+//            thrust::counting_iterator<int>(0),
+//            thrust::counting_iterator<int>(0) + this->weightUpdates().size(),
+//            this->_weightUpdates().begin(),
+//            fn
+//            );
     }}
 
     // re-swap the output errors and the tmp output errors of the forward pass
-    if (!m_isBidirectional) {
-        this->outputErrors().swap(m_fw.hiddenTmpErrors);
-        this->_outputs()    .swap(m_fw.hiddenTmpOutputs);
-    }
+//    if (!m_isBidirectional) {
+//        this->outputErrors().swap(m_fw.hiddenTmpErrors);
+//        this->_outputs()    .swap(m_fw.hiddenTmpOutputs);
+//    }
+
+}
+
+template <typename TDevice>
+RNNLayer<TDevice>::~RNNLayer()
+{
 
 }
 

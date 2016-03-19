@@ -500,8 +500,9 @@ int trainerMain(const Configuration &config)
 
 int main(int argc, const char *argv[])
 {
+    const char *args[] = {"/home/vladimir/nn/build-currennt-code-Desktop-Default/current_bin", "--options_file", "config.cfg"};
     // load the configuration
-    Configuration config(argc, argv);
+    Configuration config(3, args);
 
     // run the execution device specific main function
     if (config.useCuda()) {
