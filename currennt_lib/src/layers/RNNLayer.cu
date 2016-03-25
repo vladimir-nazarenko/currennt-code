@@ -380,7 +380,6 @@ void RNNLayer<TDevice>::loadSequences(const data_sets::DataSetFraction &fraction
 template <typename TDevice>
 void RNNLayer<TDevice>::computeForwardPass()
 {
-/*
     // sum up the activations from the preceding layer
     // forward states
     m_fw.igActsMatrix.assignProduct(m_fw.weightMatrices.igInput, true, m_precedingLayerOutputMatrix, false);
@@ -460,12 +459,10 @@ void RNNLayer<TDevice>::computeForwardPass()
     else {
         this->_outputs().swap(m_fw.hiddenTmpOutputs);
     }
-    */
 }
 
 template <typename TDevice>
 void RNNLayer<TDevice>::computeBackwardPass() {
-/*
     if (m_isBidirectional) {
         internal::ResortOutputErrorsFn fn;
         fn.layerSize      = this->size();
@@ -550,7 +547,7 @@ void RNNLayer<TDevice>::computeBackwardPass() {
             }
         }
     }}
-*/
+
     // compute the weight updates
     {{
         internal::ComputeWeightUpdateFn fn;
@@ -574,19 +571,13 @@ void RNNLayer<TDevice>::computeBackwardPass() {
                     thrust::constant_iterator<int>(0) + this->_weightUpdates().size(),
                     this->_weightUpdates().begin(),
                     fn);
-//        thrust::transform(
-//            thrust::counting_iterator<int>(0),
-//            thrust::counting_iterator<int>(0) + this->weightUpdates().size(),
-//            this->_weightUpdates().begin(),
-//            fn
-//            );
     }}
 
     // re-swap the output errors and the tmp output errors of the forward pass
-//    if (!m_isBidirectional) {
-//        this->outputErrors().swap(m_fw.hiddenTmpErrors);
-//        this->_outputs()    .swap(m_fw.hiddenTmpOutputs);
-//    }
+    if (!m_isBidirectional) {
+        this->outputErrors().swap(m_fw.hiddenTmpErrors);
+        this->_outputs()    .swap(m_fw.hiddenTmpOutputs);
+    }
 
 }
 
