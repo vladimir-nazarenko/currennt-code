@@ -45,7 +45,7 @@ namespace layers {
         const int    m_internalWeightsPerBlock;
         const real_t m_bias;
 	// FIX ME
-        const real_t m_learningRate = 1;
+        const real_t m_learningRate;
 
         real_vector m_outputErrors;
         real_vector m_weights;

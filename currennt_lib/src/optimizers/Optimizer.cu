@@ -35,6 +35,60 @@
 namespace optimizers {
 
     template <typename TDevice>
+    real_t Optimizer<TDevice>::_computeForwardBackwardPassOnTrainset() {
+        // process all data set fractions
+        real_t error = 0;
+
+        ds = this->m_trainingSet;
+        boost::shared_ptr<data_sets::DataSetFraction> frac;
+        bool firstFraction = true;
+        while ((frac = ds.getNextFraction())) {
+            // compute forward pass and calculate the error
+            m_neuralNetwork.loadSequences(*frac);
+            m_neuralNetwork.computeForwardPass();
+            error += m_neuralNetwork.calculateError();
+
+            if (calcWeightUpdates) {
+                // weight noise:
+                std::vector<Cpu::real_vector> origWeights(m_neuralNetwork.layers().size());
+                if (Configuration::instance().weightNoiseSigma() > 0) {
+                    for (size_t i = 1; i < m_neuralNetwork.layers().size()-1; ++i) {
+                        layers::TrainableLayer<TDevice> *layer = dynamic_cast<layers::TrainableLayer<TDevice>*>(m_neuralNetwork.layers()[i].get());
+                        if (layer) {
+                            origWeights[i] = layer->weights();
+                            layer->injectWeightNoise(Configuration::instance().weightNoiseSigma());
+                        }
+                    }
+                }
+                // compute the backward pass and accumulate the weight updates
+                m_neuralNetwork.computeBackwardPass();
+
+                for (size_t i = 1; i < m_neuralNetwork.layers().size()-1; ++i) {
+                    layers::TrainableLayer<TDevice> *layer = dynamic_cast<layers::TrainableLayer<TDevice>*>(m_neuralNetwork.layers()[i].get());
+                    if (!layer)
+                        continue;
+
+                    if (!firstFraction && !Configuration::instance().hybridOnlineBatch())
+                        thrust::transform(layer->weightUpdates().begin(), layer->weightUpdates().end(), m_curWeightUpdates[i].begin(), m_curWeightUpdates[i].begin(), thrust::plus<real_t>());
+                    else
+                        thrust::copy(layer->weightUpdates().begin(), layer->weightUpdates().end(), m_curWeightUpdates[i].begin());
+
+                    // restore old weights before update in case of weight noise
+                    if (Configuration::instance().weightNoiseSigma() > 0.0)
+                        thrust::copy(origWeights[i].begin(), origWeights[i].end(), layer->weights().begin());
+                }
+
+            }
+
+            firstFraction = false;
+        }
+
+        error /= ds.totalSequences();
+
+        return error;
+    }
+
+    template <typename TDevice>
     real_t Optimizer<TDevice>::_processDataSet(data_sets::DataSet &ds, bool calcWeightUpdates, real_t *classError)
     {
         // process all data set fractions
@@ -99,6 +153,8 @@ namespace optimizers {
         // normalize the errors
         error /= ds.totalSequences();
         *classError /= (real_t)ds.totalTimesteps();
+
+        m_curTrainingError = error;
 
         return error;
     }
@@ -178,6 +234,12 @@ namespace optimizers {
     const std::vector<typename Optimizer<TDevice>::real_vector>& Optimizer<TDevice>::_curWeightUpdates() const
     {
         return m_curWeightUpdates;
+    }
+
+    template <typename TDevice>
+    real_t Optimizer<TDevice>::_curTrainError() const
+    {
+        return m_curTrainingError;
     }
 
     template <typename TDevice>

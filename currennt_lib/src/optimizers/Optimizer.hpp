@@ -74,8 +74,9 @@ namespace optimizers {
         static void _importWeights(const helpers::JsonDocument &jsonDoc, const char *arrayName, std::vector<real_vector> *weights);
         NeuralNetwork<TDevice>& _neuralNetwork();
         const std::vector<real_vector>& _curWeightUpdates() const;
+        real_t _curTrainError() const;
         virtual void _updateWeights() =0;
-
+        real_t _computeForwardBackwardPassOnTrainset();
     public:
         /**
          * Constructs the optimizer
