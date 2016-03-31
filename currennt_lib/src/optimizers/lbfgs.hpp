@@ -28,7 +28,7 @@ public:
     void importState(const helpers::JsonDocument &jsonDoc);
 
 private:
-    void _writeWeights();
+    void _writeWeights(real_vector &input);
     void _readDerivatives(real_vector &output);
     real_vector mInversedHessian;
     real_vector mUpdateDirection;

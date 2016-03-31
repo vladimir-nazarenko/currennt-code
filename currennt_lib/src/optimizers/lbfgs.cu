@@ -1,6 +1,7 @@
 #include "lbfgs.hpp"
 #include "../helpers/Matrix.hpp"
 #include "../helpers/getRawPointer.cuh"
+#include <algorithm>
 
 namespace internal {
 namespace {
@@ -103,15 +104,15 @@ void Lbfgs<TDevice>::importState(const helpers::JsonDocument &jsonDoc)
 }
 
 template <typename TDevice>
-void Lbfgs<TDevice>::_writeWeights()
+void Lbfgs<TDevice>::_writeWeights(real_vector &input)
 {
+    int offset = 0;
     for (size_t i = 1; i < this->_neuralNetwork().layers().size()-1; ++i) {
         layers::TrainableLayer<TDevice> *layer = dynamic_cast<layers::TrainableLayer<TDevice>*>(this->_neuralNetwork().layers()[i].get());
         if (!layer)
             continue;
 
-        thrust::copy_n(mDerivatives.begin() + offset, this->_curWeightUpdates()[i].begin(), this->_curWeightUpdates()[i].size());
-        thrust::copy_n(mWeights.begin() + offset    , layer->weights().begin()            , layer->size()                      );
+        thrust::copy_n(input.begin() + offset, layer->size(), layer->weights().begin());
         offset += layer->size();
     }
 }
@@ -133,38 +134,6 @@ void Lbfgs<TDevice>::_readDerivatives(real_vector &output)
 template <typename TDevice>
 void Lbfgs<TDevice>::_updateWeights()
 {
-
-//    internal::UpdateWeightFn updateWeightFn;
-//    updateWeightFn.momentum     = m_momentum;
-
-//    for (size_t i = 1; i < this->_neuralNetwork().layers().size()-1; ++i) {
-//        layers::TrainableLayer<TDevice> *layer = dynamic_cast<layers::TrainableLayer<TDevice>*>(this->_neuralNetwork().layers()[i].get());
-//        if (!layer)
-//            continue;
-
-//        updateWeightFn.learningRate = m_learningRate;
-//        if (layer->learningRate() >= 0.0)
-//            updateWeightFn.learningRate = layer->learningRate();
-//        //std::cout << "layer " << layer->name() << ": learning rate " << updateWeightFn.learningRate << std::endl;
-
-//        updateWeightFn.weights       = helpers::getRawPointer(layer->weights());
-//        updateWeightFn.weightUpdates = helpers::getRawPointer(this->_curWeightUpdates()[i]);
-//        updateWeightFn.weightDeltas  = helpers::getRawPointer(m_weightDeltas[i]);
-
-//        thrust::transform(
-//            thrust::counting_iterator<int>(0),
-//            thrust::counting_iterator<int>((int)layer->weights().size()),
-//            layer->weights().begin(),
-//            updateWeightFn
-//            );
-//    }
-
-//    mInversedHessian;
-//    mInversedHessianMatrix;
-//    mUpdateDirection;
-//    mUpdateDirectionMatrix;
-//    real_t beta1 = 0.5;
-
     // load weights and derivatives
     int offset = 0;
     for (size_t i = 1; i < this->_neuralNetwork().layers().size()-1; ++i) {
@@ -188,7 +157,10 @@ void Lbfgs<TDevice>::_updateWeights()
     real_t beta = 0.5;
     real_t beta1 = 0.25;
     real_vector newGrad = mDerivatives;
-    // not exactly right
+    real_t newError;
+    real_t gByD;
+    real_t newGradByD;
+    // suppose that if alpha = 1 doesn't satisfy Wolfe conditions, we use it nevertheless
     do {
         // start with alpha = 1
         alpha /= 2;
@@ -200,25 +172,32 @@ void Lbfgs<TDevice>::_updateWeights()
 
         // gByD = g_k' * d_k
         real_vector gByDvec = mUpdateDirection;
-        thrust::transform(gByDvec.begin(), gByDvec.end(), mDerivatives.begin(), thrust::multiplies<float>());
-        real_t gByD = thrust::reduce(gByDvec.begin(), gByDvec.end());
+        thrust::transform(gByDvec.begin(), gByDvec.end(), mDerivatives.begin(), gByDvec.begin(), thrust::multiplies<float>());
+        gByD = thrust::reduce(gByDvec.begin(), gByDvec.end());
 
         // update weights of neural network
-        thrust::swap(mWeights, tmp);
-        _writeWeights();
+        _writeWeights(tmp);
 
         // newGrad = g(x_k + alpha_k * d_k)
-        real_t newError = _computeForwardBackwardPassOnTrainset();
+        newError = this->_computeForwardBackwardPassOnTrainset();
         _readDerivatives(newGrad);
 
         // newGradByD = g(x_k + alpha_k * d_k)' * d_k
         thrust::transform(newGrad.begin(), newGrad.end(), mUpdateDirection.begin(), newGrad.begin(), thrust::multiplies<float>());
-        real_t newGradByD = thrust::reduce(newGrad.begin(), newGrad.end());
+        newGradByD = thrust::reduce(newGrad.begin(), newGrad.end());
         // check the Wolfe conditions
-    } while (newErr <= errorFnValue + beta1 * alpha * gByD &&
+    } while (newError <= errorFnValue + beta1 * alpha * gByD &&
              newGradByD >= beta * gByD);
 
+    // s = x_k+1 - x_k; y = g_k+1 - g_k
     real_vector s = mUpdateDirection;
+    thrust::transform(s.begin(), s.end(), thrust::make_constant_iterator(std::min(alpha, (float)1)), s.begin(), thrust::multiplies<float>());
+
+    // update the weights of neural network
+    thrust::transform(s.begin(), s.end(), mWeights.begin(), mWeights.begin(), thrust::plus<float>());
+    _writeWeights(mWeights);
+
+    // update the inversed hessian
     real_vector y = newGrad;
     thrust::transform(y.begin(), y.end(), mDerivatives.begin(), y.begin(), thrust::minus<float>());
 
@@ -247,15 +226,15 @@ void Lbfgs<TDevice>::_updateWeights()
     thrust::transform(thrust::make_counting_iterator(0), thrust::make_counting_iterator(0) + mNumberOfWeights * mNumberOfWeights,
                       sByS.begin(), getCross);
 
-    helpers::Matrix<TDevice> vMatrix(v, mNumberOfWeights, mNumberOfWeights);
+    helpers::Matrix<TDevice> vMatrix(&v, mNumberOfWeights, mNumberOfWeights);
 
-    auto newInversedHessian(mNumberOfWeights * mNumberOfWeights, 0);
+    real_vector newInversedHessian(mNumberOfWeights * mNumberOfWeights, 0);
 
-    helpers::Matrix<TDevice> newInversedHessianMatrix(newInversedHessian, mNumberOfWeights, mNumberOfWeights);
+    helpers::Matrix<TDevice> newInversedHessianMatrix(&newInversedHessian, mNumberOfWeights, mNumberOfWeights);
 
     newInversedHessianMatrix.assignProduct(vMatrix, true, mInversedHessianMatrix, false);
     newInversedHessian.swap(mInversedHessian);
-    newInversedHessianMatrix.assignProduct(mInversedHessian, false, vMatrix, false);
+    newInversedHessianMatrix.assignProduct(mInversedHessianMatrix, false, vMatrix, false);
     newInversedHessian.swap(mInversedHessian);
     thrust::transform(mInversedHessian.begin(), mInversedHessian.end(), sByS.begin(), mInversedHessian.begin(), thrust::plus<float>());
 }

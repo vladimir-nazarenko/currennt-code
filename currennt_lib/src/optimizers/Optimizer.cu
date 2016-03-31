@@ -39,51 +39,47 @@ namespace optimizers {
         // process all data set fractions
         real_t error = 0;
 
-        ds = this->m_trainingSet;
         boost::shared_ptr<data_sets::DataSetFraction> frac;
         bool firstFraction = true;
-        while ((frac = ds.getNextFraction())) {
+        while ((frac = this->m_trainingSet.getNextFraction())) {
             // compute forward pass and calculate the error
             m_neuralNetwork.loadSequences(*frac);
             m_neuralNetwork.computeForwardPass();
             error += m_neuralNetwork.calculateError();
 
-            if (calcWeightUpdates) {
-                // weight noise:
-                std::vector<Cpu::real_vector> origWeights(m_neuralNetwork.layers().size());
-                if (Configuration::instance().weightNoiseSigma() > 0) {
-                    for (size_t i = 1; i < m_neuralNetwork.layers().size()-1; ++i) {
-                        layers::TrainableLayer<TDevice> *layer = dynamic_cast<layers::TrainableLayer<TDevice>*>(m_neuralNetwork.layers()[i].get());
-                        if (layer) {
-                            origWeights[i] = layer->weights();
-                            layer->injectWeightNoise(Configuration::instance().weightNoiseSigma());
-                        }
-                    }
-                }
-                // compute the backward pass and accumulate the weight updates
-                m_neuralNetwork.computeBackwardPass();
-
+            // weight noise:
+            std::vector<Cpu::real_vector> origWeights(m_neuralNetwork.layers().size());
+            if (Configuration::instance().weightNoiseSigma() > 0) {
                 for (size_t i = 1; i < m_neuralNetwork.layers().size()-1; ++i) {
                     layers::TrainableLayer<TDevice> *layer = dynamic_cast<layers::TrainableLayer<TDevice>*>(m_neuralNetwork.layers()[i].get());
-                    if (!layer)
-                        continue;
-
-                    if (!firstFraction && !Configuration::instance().hybridOnlineBatch())
-                        thrust::transform(layer->weightUpdates().begin(), layer->weightUpdates().end(), m_curWeightUpdates[i].begin(), m_curWeightUpdates[i].begin(), thrust::plus<real_t>());
-                    else
-                        thrust::copy(layer->weightUpdates().begin(), layer->weightUpdates().end(), m_curWeightUpdates[i].begin());
-
-                    // restore old weights before update in case of weight noise
-                    if (Configuration::instance().weightNoiseSigma() > 0.0)
-                        thrust::copy(origWeights[i].begin(), origWeights[i].end(), layer->weights().begin());
+                    if (layer) {
+                        origWeights[i] = layer->weights();
+                        layer->injectWeightNoise(Configuration::instance().weightNoiseSigma());
+                    }
                 }
+            }
+            // compute the backward pass and accumulate the weight updates
+            m_neuralNetwork.computeBackwardPass();
 
+            for (size_t i = 1; i < m_neuralNetwork.layers().size()-1; ++i) {
+                layers::TrainableLayer<TDevice> *layer = dynamic_cast<layers::TrainableLayer<TDevice>*>(m_neuralNetwork.layers()[i].get());
+                if (!layer)
+                    continue;
+
+                if (!firstFraction && !Configuration::instance().hybridOnlineBatch())
+                    thrust::transform(layer->weightUpdates().begin(), layer->weightUpdates().end(), m_curWeightUpdates[i].begin(), m_curWeightUpdates[i].begin(), thrust::plus<real_t>());
+                else
+                    thrust::copy(layer->weightUpdates().begin(), layer->weightUpdates().end(), m_curWeightUpdates[i].begin());
+
+                // restore old weights before update in case of weight noise
+                if (Configuration::instance().weightNoiseSigma() > 0.0)
+                    thrust::copy(origWeights[i].begin(), origWeights[i].end(), layer->weights().begin());
             }
 
             firstFraction = false;
         }
 
-        error /= ds.totalSequences();
+        error /= this->m_trainingSet.totalSequences();
 
         return error;
     }
