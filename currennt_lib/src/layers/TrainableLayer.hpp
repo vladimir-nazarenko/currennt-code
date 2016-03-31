@@ -46,7 +46,7 @@ namespace layers {
         const real_t m_bias;
         const real_t m_learningRate;
 
-        //real_vector m_outputErrors;
+        real_vector m_outputErrors;
         real_vector m_weights;
         real_vector m_weightUpdates;
 
@@ -153,6 +153,9 @@ namespace layers {
          * @see Layer::exportLayer()
          */
         virtual void exportLayer(const helpers::JsonValue &layersArray, const helpers::JsonAllocator &allocator) const;
+
+
+        real_vector &outputErrors();
     };
 
 } // namespace layers

@@ -51,6 +51,7 @@ namespace layers {
         , m_inputWeightsPerBlock   (inputWeightsPerBlock)
         , m_internalWeightsPerBlock(internalWeightsPerBlock)
         , m_bias                   (layerChild->HasMember("bias") ? static_cast<real_t>((*layerChild)["bias"].GetDouble()) : 0)
+        , m_learningRate           (layerChild->HasMember("learningRate") ? static_cast<real_t>((*layerChild)["learningRate"].GetDouble()) : -1)
     {
         // check if the bias value exists
         if (!layerChild->HasMember("bias"))

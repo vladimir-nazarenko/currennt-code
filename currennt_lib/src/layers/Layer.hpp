@@ -26,6 +26,7 @@
 #include "../Types.hpp"
 #include "../data_sets/DataSetFraction.hpp"
 #include "../helpers/JsonClassesForward.hpp"
+#include <thrust/transform_reduce.h>
 
 #include <string>
 
