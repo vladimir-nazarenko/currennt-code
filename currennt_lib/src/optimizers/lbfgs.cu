@@ -6,34 +6,6 @@
 namespace internal {
 namespace {
 
-/* Recieves hessian guess, weights, weight updates and deltas
- * makes next guess for hessian, makes one iteration of bfgs
- */
-struct UpdateWeightFn {
-
-    real_t *inversedhessian;
-    const real_t *weights;
-    const real_t *weightUpdates;
-    real_t *weightDeltas;
-    const int weightsNumber;
-
-    __host__ __device__ real_t operator() (const int &weightIdx) {
-        real_t updateDirection = 0;
-        for (int i = weightsNumber * weightIdx; i < weightsNumber * (weightIdx + 1); ++i) {
-            updateDirection -= inversedhessian[i] * weightUpdates[i];
-        }
-        // lune search instead of constant
-        real_t alpha = 0.5;
-        real_t delta = alpha * updateDirection;
-        weightDeltas[weightIdx] = delta;
-        real_t newWeight = weights[weightIdx] + delta;
-
-
-
-        return newWeight;
-    }
-};
-
 struct CrossProductFn {
     real_t *y;
     real_t *s;
