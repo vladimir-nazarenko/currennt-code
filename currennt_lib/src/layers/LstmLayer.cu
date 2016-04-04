@@ -35,6 +35,7 @@
 #include <thrust/for_each.h>
 #include <thrust/iterator/constant_iterator.h>
 #include <thrust/iterator/counting_iterator.h>
+#include <thrust/sequence.h>
 
 
 namespace internal {
@@ -281,7 +282,7 @@ namespace {
                 real_t nextCellStateErr = cellStateErrors[outputIdx - prevOutputDistance];
                 real_t nextIgDelta      = igDeltas       [outputIdx - prevOutputDistance];
                 real_t nextFgDelta      = fgDeltas       [outputIdx - prevOutputDistance];
-                
+
                 real_t igPeepWeight = igPeepWeights[blockIdx];
                 real_t fgPeepWeight = fgPeepWeights[blockIdx];
 
@@ -329,23 +330,23 @@ namespace {
         real_t bias;
 
         const real_t *plOutputs;
-        const real_t *fwOutputs;   
-        const real_t *bwOutputs;   
+        const real_t *fwOutputs;
+        const real_t *bwOutputs;
         const real_t *fwCellStates;
         const real_t *bwCellStates;
-        const real_t *fwNiDeltas;  
-        const real_t *bwNiDeltas;  
-        const real_t *fwIgDeltas;  
-        const real_t *bwIgDeltas;  
-        const real_t *fwFgDeltas;  
-        const real_t *bwFgDeltas;  
-        const real_t *fwOgDeltas;  
-        const real_t *bwOgDeltas;  
+        const real_t *fwNiDeltas;
+        const real_t *bwNiDeltas;
+        const real_t *fwIgDeltas;
+        const real_t *bwIgDeltas;
+        const real_t *fwFgDeltas;
+        const real_t *bwFgDeltas;
+        const real_t *fwOgDeltas;
+        const real_t *bwOgDeltas;
 
         __host__ __device__ real_t operator() (const int &weightIdx) const
         {
             // determine the weight type
-            // 
+            //
             // weightType = 0bXXYY with XX = {input, bias, internal, peephole}
             //                     and  YY = {NI, IG, FG, OG}
             //
@@ -373,7 +374,7 @@ namespace {
             int weightType = (int)(weightIdx >= 0                     + 1 * inwc) +
                              (int)(weightIdx >= 0                     + 2 * inwc) +
                              (int)(weightIdx >= 0                     + 3 * inwc) +
-                             (int)(weightIdx >= 0                     + 4 * inwc) + 
+                             (int)(weightIdx >= 0                     + 4 * inwc) +
                              (int)(weightIdx >= biasWeightsOffset     + 1 * biwc) +
                              (int)(weightIdx >= biasWeightsOffset     + 2 * biwc) +
                              (int)(weightIdx >= biasWeightsOffset     + 3 * biwc) +
@@ -388,7 +389,7 @@ namespace {
             int weightTypeX = weightType & 0xC;
             int weightTypeY = weightType & 0x3;
 
-            // calculate indices, offsets and increments 
+            // calculate indices, offsets and increments
             const real_t *offOutputs;
             int           tgtBlockIdx;
             int           offOutputsInc;
@@ -398,7 +399,7 @@ namespace {
 
             switch (weightTypeX) {
             // input weight
-            case 0x0: 
+            case 0x0:
                 {{
                     // calculate indices
                     int inputWeightIdx = weightIdx;
@@ -409,7 +410,7 @@ namespace {
                     isBwStateWeight = (blockIdx >= effLayerSize);
                     if (isBwStateWeight)
                         blockIdx -= effLayerSize;
-                    
+
                     // set values for the loop below
                     tgtBlockIdx   = blockIdx;
                     offOutputs    = &plOutputs[plBlockIdx];
@@ -418,7 +419,7 @@ namespace {
                 break;
 
             // bias weight
-            case 0x4: 
+            case 0x4:
                 {{
                     // calculate indices
                     int biasWeightIdx = weightIdx - biasWeightsOffset;
@@ -437,7 +438,7 @@ namespace {
                 break;
 
             // internal weight
-            case 0x8: 
+            case 0x8:
                 {{
                     // calculate indices
                     int internalWeightIdx = weightIdx - internalWeightsOffset;
@@ -466,12 +467,12 @@ namespace {
                 break;
 
             // peephole weight
-            default: 
+            default:
                 {{
                     // calculate indices
                     int peepholeWeightIdx = weightIdx - peepholeWeightsOffset;
                     int blockIdx          = peepholeWeightIdx - (weightTypeY-1) * layerSize;
-                    
+
                     // check if we calculate backward state weights and adjust the block index
                     isBwStateWeight = (blockIdx >= effLayerSize);
                     if (isBwStateWeight)
@@ -479,7 +480,7 @@ namespace {
 
                     // select the appropriate cell states and adjust the block index
                     const real_t *cellStates = (isBwStateWeight ? bwCellStates : fwCellStates);
-                    
+
                     // set the timeshift
                     int timeShift;
                     if (weightTypeY == 0x3) {
@@ -516,7 +517,7 @@ namespace {
                 bwOgDeltas
             };
 
-            // calculate the weight update over all patterns            
+            // calculate the weight update over all patterns
             const real_t *offDeltas = &niagDeltasLut[weightTypeY + (isBwStateWeight ? 4 : 0)][tgtBlockIdx];
 
             if (skipFirstPattern) {
@@ -531,7 +532,7 @@ namespace {
             real_t wu = 0;
             for (int i = 0; i < numPatterns; ++i) {
                 wu += (offOutputs ? *offOutputs : bias) * *offDeltas;
-                    
+
                 offOutputs += offOutputsInc;
                 offDeltas  += effLayerSize;
             }
@@ -539,7 +540,7 @@ namespace {
             return wu;
         }
     };
-    
+
 } // anonymous namespace
 } // namespace internal
 
@@ -547,7 +548,7 @@ namespace {
 namespace layers {
 
     template <typename TDevice>
-    LstmLayer<TDevice>::LstmLayer(const helpers::JsonValue &layerChild, 
+    LstmLayer<TDevice>::LstmLayer(const helpers::JsonValue &layerChild,
                                   const helpers::JsonValue &weightsSection,
                                   Layer<TDevice> &precedingLayer,
                                   bool bidirectional)
@@ -556,6 +557,8 @@ namespace layers {
     {
         if (m_isBidirectional && this->size() % 2 != 0)
             throw std::runtime_error("Cannot create a bidirectional layer with an odd layer size");
+
+        std::cout << "REDUCEWEIGHTS1:(" << thrust::reduce(this->weights().begin(), this->weights().end(), 0, thrust::maximum<float>()) << ") ";
 
         // set raw pointers
         // for bidirectional layer it's 2xsize
@@ -985,6 +988,7 @@ namespace layers {
                     m_fw.timestepMatrices[timestep].tmpOutputErrors.addProduct(m_fw.weightMatrices.ogInternal, false, m_fw.timestepMatrices[timestep+1].ogDeltas, false);
                 }
 
+
                 // compute errors
                 thrust::for_each(
                     thrust::make_zip_iterator(thrust::make_tuple(m_fw.tmpOutputErrors.begin() + n*timestep,   thrust::counting_iterator<int>(n*timestep),   thrust::constant_iterator<bool>(timestep == this->curMaxSeqLength()-1),   thrust::constant_iterator<bool>(!timestep),   thrust::constant_iterator<bool>(timestep >= this->curMinSeqLength()))),
@@ -992,6 +996,7 @@ namespace layers {
                     fn
                     );
             }
+
 
             // backward states
             if (m_isBidirectional) {

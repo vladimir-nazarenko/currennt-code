@@ -124,11 +124,15 @@ namespace layers {
             }
         }
 
-        m_weights       = weights;
+        m_weights.resize(weights.size());
+        thrust::copy(weights.begin(), weights.end(), m_weights.begin());
         m_weightUpdates = weights;
 
         // resize the output errors vector
-        //m_outputErrors = Cpu::real_vector(this->_outputs().size(), (real_t)0);
+        m_outputErrors = Cpu::real_vector(this->_outputs().size(), (real_t)0);
+
+        // resize the output errors vector
+        m_outputErrors = Cpu::real_vector(this->_outputs().size(), (real_t)0);
     }
 
     template <typename TDevice>
@@ -160,11 +164,11 @@ namespace layers {
         return m_learningRate;
     }
 
-/*    template <typename TDevice>
+    template <typename TDevice>
     typename TrainableLayer<TDevice>::real_vector& TrainableLayer<TDevice>::outputErrors()
     {
         return m_outputErrors;
-    }*/
+    }
 
     template <typename TDevice>
     typename TrainableLayer<TDevice>::real_vector& TrainableLayer<TDevice>::weights()

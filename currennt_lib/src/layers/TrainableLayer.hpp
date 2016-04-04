@@ -110,7 +110,7 @@ namespace layers {
          *
          * @return The output error
          */
-        real_vector& outputErrors();
+        virtual real_vector& outputErrors();
 
         /**
          * Returns the current weights

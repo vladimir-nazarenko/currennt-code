@@ -12,6 +12,7 @@ include_directories(${GTEST_INCLUDE_DIRS})
 
 LINK_DIRECTORIES (${Boost_LIBRARY_DIR})
 
+
 SET (CMAKE_BUILD_TYPE Debug)
 SET (CUDA_NVCC_FLAGS "${CUDA_NVCC_FLAGS} -arch=compute_20")
 SET (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-format-security")
