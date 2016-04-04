@@ -109,7 +109,7 @@ namespace layers {
          *
          * @return The output error
          */
-        //real_vector& outputErrors();
+        virtual real_vector& outputErrors();
 
         /**
          * Returns the current weights
@@ -153,9 +153,6 @@ namespace layers {
          * @see Layer::exportLayer()
          */
         virtual void exportLayer(const helpers::JsonValue &layersArray, const helpers::JsonAllocator &allocator) const;
-
-
-        real_vector &outputErrors();
     };
 
 } // namespace layers
