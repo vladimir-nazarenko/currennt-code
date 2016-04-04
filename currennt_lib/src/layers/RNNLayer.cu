@@ -346,7 +346,7 @@ RNNLayer<TDevice>::RNNLayer(const helpers::JsonValue &layerChild, const helpers:
 template <typename TDevice>
 const std::string &RNNLayer<TDevice>::type() const
 {
-    static const std::string su("lrnn");
+    static const std::string su("rnn");
     static const std::string sb("brnn");
     return (m_isBidirectional ? sb : su);
 }

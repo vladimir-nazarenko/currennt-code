@@ -558,8 +558,6 @@ namespace layers {
         if (m_isBidirectional && this->size() % 2 != 0)
             throw std::runtime_error("Cannot create a bidirectional layer with an odd layer size");
 
-        std::cout << "REDUCEWEIGHTS1:(" << thrust::reduce(this->weights().begin(), this->weights().end(), 0, thrust::maximum<float>()) << ") ";
-
         // set raw pointers
         // for bidirectional layer it's 2xsize
         int ls  = this->size();
