@@ -1,4 +1,4 @@
 install:
- - sudo apt-get install build-essential cmake libbost-dev git libnetcdf-dev cuda-toolkit-7-5
+ - sudo apt-get install build-essential cmake libboost-dev git libnetcdf-dev nvidia-cuda-toolkit
 script:
  - mkdir build && cd build && cmake .. && make
