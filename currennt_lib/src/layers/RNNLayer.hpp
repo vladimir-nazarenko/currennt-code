@@ -30,20 +30,20 @@ namespace layers {
         struct timestep_matrices_t {
             helpers::Matrix<TDevice> igActs;
             helpers::Matrix<TDevice> igDeltas;
-            helpers::Matrix<TDevice> hiddenTmpOutputs;
-            helpers::Matrix<TDevice> hiddenTmpErrors;
+            helpers::Matrix<TDevice> tmpOutputs;
+            helpers::Matrix<TDevice> tmpErrors;
         };
 
         struct forward_backward_info_t {
-            real_vector hiddenTmpOutputs;
-            real_vector hiddenTmpErrors;
+            real_vector tmpOutputs;
+            real_vector tmpErrors;
             real_vector igActs;
             real_vector igDeltas;
 
             helpers::Matrix<TDevice> igActsMatrix;
             helpers::Matrix<TDevice> igDeltasMatrix;
-            helpers::Matrix<TDevice> hiddenTmpOutputsMatrix;
-            helpers::Matrix<TDevice> hiddenTmpDeltasMatrix;
+            helpers::Matrix<TDevice> tmpOutputsMatrix;
+            helpers::Matrix<TDevice> tmpErrorsMatrix;
 
             weight_matrices_t weightMatrices;
             weight_matrices_t weightUpdateMatrices;

@@ -307,7 +307,6 @@ namespace {
             real_t igDelta = gate_act_fn_t::deriv(igAct) * niAct * cellStateErr;
 
             // store the niag deltas and the cell state error
-            // TODO: Do we need this code?
             niDeltas       [outputIdx] = helpers::limitedError(niDelta);
             igDeltas       [outputIdx] = helpers::limitedError(igDelta);
             fgDeltas       [outputIdx] = helpers::limitedError(fgDelta);
@@ -557,8 +556,6 @@ namespace layers {
     {
         if (m_isBidirectional && this->size() % 2 != 0)
             throw std::runtime_error("Cannot create a bidirectional layer with an odd layer size");
-
-        std::cout << "REDUCEWEIGHTS1:(" << thrust::reduce(this->weights().begin(), this->weights().end(), 0, thrust::maximum<float>()) << ") ";
 
         // set raw pointers
         // for bidirectional layer it's 2xsize
@@ -1085,7 +1082,7 @@ namespace layers {
 
             thrust::transform(
                 thrust::counting_iterator<int>(0),
-                thrust::counting_iterator<int>(0) + (int)this->weightUpdates().size(),
+                thrust::counting_iterator<int>(0) + (int)this->_weightUpdates().size(),
                 this->_weightUpdates().begin(),
                 fn
                 );
@@ -1096,6 +1093,7 @@ namespace layers {
             this->outputErrors().swap(m_fw.tmpOutputErrors);
             this->_outputs()    .swap(m_fw.tmpOutputs);
         }
+
     }
 
 
