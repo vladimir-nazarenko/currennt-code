@@ -5,11 +5,11 @@ then
 	exit;
 fi
 
-for learnRate in "0.01 0.001 0.0001 0.00001"
+for learnRate in 0.00001
 do
 sed -i '$ d' config.cfg && echo "learning_rate = $learnRate" >> config.cfg
 while read p; do
-	echo "processing $p"
+	echo "processing $p `date`"
 	read -r -a array <<< "$p"
 	> network.jsn
 	echo "{
@@ -42,6 +42,6 @@ while read p; do
     ]
 }"  >> network.jsn
 
-../../../../build-currennt-code-Desktop-Default/currennt --options_file config.cfg 2>&1 > results/res${p// /_}.txt
+../../../build/currennt --options_file config.cfg 2>&1 > results/res${p// /_}learnRate$learnRate.txt
 done <settings.txt
 done
