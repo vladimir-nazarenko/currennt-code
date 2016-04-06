@@ -307,7 +307,6 @@ namespace {
             real_t igDelta = gate_act_fn_t::deriv(igAct) * niAct * cellStateErr;
 
             // store the niag deltas and the cell state error
-            // TODO: Do we need this code?
             niDeltas       [outputIdx] = helpers::limitedError(niDelta);
             igDeltas       [outputIdx] = helpers::limitedError(igDelta);
             fgDeltas       [outputIdx] = helpers::limitedError(fgDelta);
@@ -1083,7 +1082,7 @@ namespace layers {
 
             thrust::transform(
                 thrust::counting_iterator<int>(0),
-                thrust::counting_iterator<int>(0) + (int)this->weightUpdates().size(),
+                thrust::counting_iterator<int>(0) + (int)this->_weightUpdates().size(),
                 this->_weightUpdates().begin(),
                 fn
                 );
@@ -1094,6 +1093,7 @@ namespace layers {
             this->outputErrors().swap(m_fw.tmpOutputErrors);
             this->_outputs()    .swap(m_fw.tmpOutputs);
         }
+
     }
 
 

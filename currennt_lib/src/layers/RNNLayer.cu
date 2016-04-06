@@ -9,8 +9,45 @@
 
 namespace internal {
 namespace {
-    typedef activation_functions::Tanh output_act_fn_t;
-    typedef activation_functions::Logistic input_act_fn_t;
+    typedef activation_functions::Tanh input_act_fn_t;
+
+    struct ComputeBlockOutputFn {
+        int els;
+        const real_t *igActs;
+        real_t bias;
+        const real_t *biasWeights;
+
+        __host__ __device__ real_t operator() (const int &outputIdx, const bool &isFirstTimestep) {
+            return input_act_fn_t::fn(igActs[outputIdx] + bias * biasWeights[outputIdx % els]);
+        }
+    };
+
+    /**
+     * Gets two vectors with outputs from forward and backward directions and merges them into one vector
+     * such that frames of the backward outputs alternate with the ones of the forward outputs. Forward frame comes first.
+     */
+    struct ResortOutputsFn
+    {
+        int layerSize;
+        int effLayerSize;
+
+        const real_t *fwOutputs;
+        const real_t *bwOutputs;
+
+        __host__ __device__ real_t operator() (const int &outputIdx) const
+        {
+            // calculate indices
+            int patIdx = outputIdx / layerSize;
+            int valIdx = outputIdx % layerSize;
+            int offset = patIdx * effLayerSize + valIdx;
+
+            // store the value
+            if (valIdx < effLayerSize)
+                return fwOutputs[offset];
+            else
+                return bwOutputs[offset - effLayerSize];
+        }
+    };
 
     // this functor gets the value and index and stores the value in one of vectors for errors:
     // one for forward state and another for backward according to the following layout.
@@ -44,46 +81,6 @@ namespace {
     };
 
     /**
-     * Gets two vectors with outputs from forward and backward directions and merges them into one vector
-     * such that frames of the backward outputs alternate with the ones of the forward outputs. Forward frame comes first.
-     */
-    struct ResortOutputsFn
-    {
-        int layerSize;
-        int effLayerSize;
-
-        const real_t *fwOutputs;
-        const real_t *bwOutputs;
-
-        __host__ __device__ real_t operator() (const int &outputIdx) const
-        {
-            // calculate indices
-            int patIdx = outputIdx / layerSize;
-            int valIdx = outputIdx % layerSize;
-            int offset = patIdx * effLayerSize + valIdx;
-
-            // store the value
-            if (valIdx < effLayerSize)
-                return fwOutputs[offset];
-            else
-                return bwOutputs[offset - effLayerSize];
-        }
-    };
-
-    struct ComputeBlockOutputFn {
-        int els;
-        const real_t *igActs;
-        real_t bias;
-        const real_t *biasWeights;
-
-        __host__ __device__ real_t operator() (const int &outputIdx, const bool &isFirstTimestep) {
-            return isFirstTimestep ?
-                        0 :
-                        input_act_fn_t::fn(igActs[outputIdx] + bias * biasWeights[outputIdx % els]);
-        }
-    };
-
-    /**
      * Computes the derivatives of the outputs
      * Not sure if it's crrect
      */
@@ -99,7 +96,7 @@ namespace {
         __host__ __device__ void operator() (const thrust::tuple<const real_t&, int, bool, bool, bool> &t) const
         {
             // unpack the tuple
-            real_t hiddenErr    = t.get<0>();
+            real_t outputErr    = t.get<0>();
             int    outputIdx    = t.get<1>();
             bool   firstCall    = t.get<2>();
             bool   lastCall     = t.get<3>();
@@ -117,7 +114,7 @@ namespace {
 
             real_t igAct = igActs[outputIdx];
 
-            real_t igDelta = input_act_fn_t::deriv(igAct) * hiddenErr;
+            real_t igDelta = input_act_fn_t::deriv(igAct) * outputErr;
 
             igDeltas[outputIdx] = helpers::limitedError(igDelta);
         }
@@ -146,13 +143,12 @@ namespace {
         {
             // determine the weight type
             //
-            // weightType = 0bXX with XX = {input, bias, internal, peephole}
+            // weightType = 0bXX with XX = {input, bias, internal}
             // weightType = 0b00 ( 0): input weight
             //              0b01 ( 1): bias weight
             //              0b10 ( 2): internal weight
             int inwc = layerSize * precLayerSize;
             int biwc = layerSize;
-            int itwc = layerSize * effLayerSize;
 
             int weightType = (int)(weightIdx >= 0                 + 1 * inwc) +
                              (int)(weightIdx >= biasWeightsOffset + 1 * biwc);
@@ -167,7 +163,7 @@ namespace {
 
             switch (weightType) {
             // input weight
-            case 0x0:
+            case 0:
                 {{
                     // calculate indices
                     int inputWeightIdx = weightIdx;
@@ -187,7 +183,7 @@ namespace {
                 break;
 
             // bias weight
-            case 0x4:
+            case 1:
                 {{
                     // calculate indices
                     int biasWeightIdx = weightIdx - biasWeightsOffset;
@@ -206,7 +202,7 @@ namespace {
                 break;
 
             // internal weight
-            case 0x8:
+            case 2:
                 {{
                     // calculate indices
                     int internalWeightIdx = weightIdx - internalWeightsOffset;
@@ -234,6 +230,7 @@ namespace {
                 }}
                 break;
             }
+
 
             // determine the start of the delta values
             const real_t *igDeltasLut[] = {
@@ -279,6 +276,9 @@ RNNLayer<TDevice>::RNNLayer(const helpers::JsonValue &layerChild, const helpers:
       m_isBidirectional(bidirectional)
 {
 
+    if (m_isBidirectional && this->size() % 2 != 0)
+        throw std::runtime_error("Cannot create a bidirectional layer with an odd layer size");
+
     // calculate sizes
     // previous layer size as defined by user
     int pls = this->precedingLayer().size();
@@ -295,12 +295,11 @@ RNNLayer<TDevice>::RNNLayer(const helpers::JsonValue &layerChild, const helpers:
 
         Cpu::real_vector tmp(this->outputs().size() / (m_isBidirectional ? 2 : 1), 0);
 
-        // potentially error-prone
         // call copy constructor to initialize vectors
-        fwbw->hiddenTmpErrors  = tmp;
-        fwbw->hiddenTmpOutputs = tmp;
-        fwbw->igActs           = tmp;
-        fwbw->igDeltas         = tmp;
+        fwbw->tmpErrors  = tmp;
+        fwbw->tmpOutputs = tmp;
+        fwbw->igActs     = tmp;
+        fwbw->igDeltas   = tmp;
 
 
         weight_matrices_t *wmArr[] = { &fwbw->weightMatrices, &fwbw->weightUpdateMatrices };
@@ -332,10 +331,10 @@ RNNLayer<TDevice>::RNNLayer(const helpers::JsonValue &layerChild, const helpers:
             int offset = timestep * rows * cols;
 
             timestep_matrices_t tm;
-            tm.hiddenTmpErrors  = helpers::Matrix<TDevice>(&fwbw->hiddenTmpErrors, rows, cols, offset);
-            tm.hiddenTmpOutputs = helpers::Matrix<TDevice>(&fwbw->hiddenTmpOutputs,rows, cols, offset);
-            tm.igActs           = helpers::Matrix<TDevice>(&fwbw->igActs,          rows, cols, offset);
-            tm.igDeltas         = helpers::Matrix<TDevice>(&fwbw->igDeltas,        rows, cols, offset);
+            tm.tmpErrors  = helpers::Matrix<TDevice>(&fwbw->tmpErrors , rows, cols, offset);
+            tm.tmpOutputs = helpers::Matrix<TDevice>(&fwbw->tmpOutputs, rows, cols, offset);
+            tm.igActs     = helpers::Matrix<TDevice>(&fwbw->igActs    , rows, cols, offset);
+            tm.igDeltas   = helpers::Matrix<TDevice>(&fwbw->igDeltas  , rows, cols, offset);
 
             fwbw->timestepMatrices.push_back(tm);
         }
@@ -369,20 +368,24 @@ void RNNLayer<TDevice>::loadSequences(const data_sets::DataSetFraction &fraction
         int rows = this->size() / (m_isBidirectional ? 2 : 1);
         int cols = this->curMaxSeqLength() * this->parallelSequences();
 
-        fwbw->igActsMatrix           = helpers::Matrix<TDevice>(&fwbw->igActs           , rows, cols);
-        fwbw->hiddenTmpOutputsMatrix = helpers::Matrix<TDevice>(&fwbw->hiddenTmpOutputs , rows, cols);
-
-        fwbw->igDeltasMatrix         = helpers::Matrix<TDevice>(&fwbw->igDeltas         , rows, cols);
-        fwbw->hiddenTmpDeltasMatrix  = helpers::Matrix<TDevice>(&fwbw->hiddenTmpErrors  , rows, cols);
+        fwbw->igActsMatrix   = helpers::Matrix<TDevice>(&fwbw->igActs  , rows, cols);
+        fwbw->igDeltasMatrix = helpers::Matrix<TDevice>(&fwbw->igDeltas, rows, cols);
     }
 }
 
 template <typename TDevice>
 void RNNLayer<TDevice>::computeForwardPass()
 {
+
+    if (!m_isBidirectional) {
+        m_fw.tmpOutputs.swap(this->_outputs());
+    }
+
     // sum up the activations from the preceding layer
     // forward states
     m_fw.igActsMatrix.assignProduct(m_fw.weightMatrices.igInput, true, m_precedingLayerOutputMatrix, false);
+    if (m_isBidirectional)
+        m_bw.igActsMatrix.assignProduct(m_bw.weightMatrices.igInput, true, m_precedingLayerOutputMatrix, false);
 
     // compute the block outputs
     int els = this->size() / (m_isBidirectional ? 2 : 1);
@@ -398,7 +401,7 @@ void RNNLayer<TDevice>::computeForwardPass()
     for (int timestep = 0; timestep < this->curMaxSeqLength(); ++timestep) {
         // collect outputs from previous timestep
         if (timestep != 0) {
-            m_fw.timestepMatrices[timestep].igActs.addProduct(m_fw.weightMatrices.igInternal, true, m_fw.timestepMatrices[timestep-1].hiddenTmpOutputs, false);
+            m_fw.timestepMatrices[timestep].igActs.addProduct(m_fw.weightMatrices.igInternal, true, m_fw.timestepMatrices[timestep-1].tmpOutputs, false);
         }
 
         // compute outputs
@@ -406,14 +409,13 @@ void RNNLayer<TDevice>::computeForwardPass()
                     thrust::counting_iterator<int>(n*timestep),
                     thrust::counting_iterator<int>(n*timestep) + n,
                     thrust::constant_iterator<bool>(!timestep),
-                    m_fw.hiddenTmpOutputs.begin() + n*timestep,
+                    m_fw.tmpOutputs.begin() + n*timestep,
                     fn
                     );
     }
 
     // backward states
     if (m_isBidirectional) {
-        m_bw.igActsMatrix.assignProduct(m_bw.weightMatrices.igInput, true, m_precedingLayerOutputMatrix, false);
 
 
         // compute the block outputs
@@ -427,7 +429,7 @@ void RNNLayer<TDevice>::computeForwardPass()
         for (int timestep = this->curMaxSeqLength()-1; timestep >= 0; --timestep) {
             // collect outputs from previous timestep
             if (timestep != this->curMaxSeqLength()-1) {
-                m_bw.timestepMatrices[timestep].igActs.addProduct(m_bw.weightMatrices.igInternal, true, m_bw.timestepMatrices[timestep+1].hiddenTmpOutputs, false);
+                m_bw.timestepMatrices[timestep].igActs.addProduct(m_bw.weightMatrices.igInternal, true, m_bw.timestepMatrices[timestep+1].tmpOutputs, false);
             }
 
             // compute outputs
@@ -435,7 +437,7 @@ void RNNLayer<TDevice>::computeForwardPass()
                         thrust::counting_iterator<int>(n*timestep),
                         thrust::counting_iterator<int>(n*timestep) + n,
                         thrust::constant_iterator<bool>(timestep == this->curMaxSeqLength()-1),
-                        m_bw.hiddenTmpOutputs.begin() + n*timestep,
+                        m_bw.tmpOutputs.begin() + n*timestep,
                         fn
                         );
         }
@@ -446,8 +448,8 @@ void RNNLayer<TDevice>::computeForwardPass()
         internal::ResortOutputsFn fn;
         fn.layerSize    = this->size();
         fn.effLayerSize = this->size() / 2;
-        fn.fwOutputs    = helpers::getRawPointer(m_fw.hiddenTmpOutputs);
-        fn.bwOutputs    = helpers::getRawPointer(m_bw.hiddenTmpOutputs);
+        fn.fwOutputs    = helpers::getRawPointer(m_fw.tmpOutputs);
+        fn.bwOutputs    = helpers::getRawPointer(m_bw.tmpOutputs);
 
         thrust::transform(
                     thrust::counting_iterator<int>(0),
@@ -457,7 +459,16 @@ void RNNLayer<TDevice>::computeForwardPass()
                     );
     }
     else {
-        this->_outputs().swap(m_fw.hiddenTmpOutputs);
+        this->_outputs().swap(m_fw.tmpOutputs);
+//        std::cout << "Size(" << this->_outputs().size() << ")" << "Residue(" << this->_outputs().size() % 5 << ")" << "MaxSeqLength(" << this->curMaxSeqLength() << ")";
+//        for(int i = 0; i < this->_outputs().size() / 5; ++i) {
+//            for (int j = 0; j < 5; ++j)
+//                std::cout << this->_outputs()[i * 5 + j] << " ";
+//            std::cout << "|\n";
+//        }
+
+//        throw 20;
+
     }
 }
 
@@ -467,8 +478,8 @@ void RNNLayer<TDevice>::computeBackwardPass() {
         internal::ResortOutputErrorsFn fn;
         fn.layerSize      = this->size();
         fn.effLayerSize   = this->size() / 2;
-        fn.fwOutputErrors = helpers::getRawPointer(m_fw.hiddenTmpErrors);
-        fn.bwOutputErrors = helpers::getRawPointer(m_bw.hiddenTmpErrors);
+        fn.fwOutputErrors = helpers::getRawPointer(m_fw.tmpErrors);
+        fn.bwOutputErrors = helpers::getRawPointer(m_bw.tmpErrors);
 
         int n = this->curMaxSeqLength() * this->parallelSequences() * this->size();
 
@@ -479,8 +490,8 @@ void RNNLayer<TDevice>::computeBackwardPass() {
             );
     }
     else {
-        m_fw.hiddenTmpErrors.swap(this->outputs());
-        m_fw.hiddenTmpErrors.swap(this->outputErrors());
+        m_fw.tmpOutputs.swap(this->outputs());
+        m_fw.tmpErrors .swap(this->outputErrors());
     }
 
     // calculate the block errors
@@ -499,13 +510,13 @@ void RNNLayer<TDevice>::computeBackwardPass() {
         for (int timestep = this->curMaxSeqLength()-1; timestep >= 0; --timestep) {
             // collect errors from previous timestep
             if (timestep != this->curMaxSeqLength()-1) {
-                m_fw.timestepMatrices[timestep].hiddenTmpErrors.addProduct(m_fw.weightMatrices.igInternal, false, m_fw.timestepMatrices[timestep+1].igDeltas, false);
+                m_fw.timestepMatrices[timestep].tmpErrors.addProduct(m_fw.weightMatrices.igInternal, false, m_fw.timestepMatrices[timestep+1].igDeltas, false);
             }
 
             // compute errors
             thrust::for_each(
-                thrust::make_zip_iterator(thrust::make_tuple(m_fw.hiddenTmpErrors.begin() + n*timestep,   thrust::counting_iterator<int>(n*timestep),   thrust::constant_iterator<bool>(timestep == this->curMaxSeqLength()-1),   thrust::constant_iterator<bool>(!timestep),   thrust::constant_iterator<bool>(timestep >= this->curMinSeqLength()))),
-                thrust::make_zip_iterator(thrust::make_tuple(m_fw.hiddenTmpErrors.begin() + n*timestep+n, thrust::counting_iterator<int>(n*timestep)+n, thrust::constant_iterator<bool>(timestep == this->curMaxSeqLength()-1)+n, thrust::constant_iterator<bool>(!timestep)+n, thrust::constant_iterator<bool>(timestep >= this->curMinSeqLength())+n)),
+                thrust::make_zip_iterator(thrust::make_tuple(m_fw.tmpErrors.begin() + n*timestep,   thrust::counting_iterator<int>(n*timestep),   thrust::constant_iterator<bool>(timestep == this->curMaxSeqLength()-1),   thrust::constant_iterator<bool>(!timestep),   thrust::constant_iterator<bool>(timestep >= this->curMinSeqLength()))),
+                thrust::make_zip_iterator(thrust::make_tuple(m_fw.tmpErrors.begin() + n*timestep+n, thrust::counting_iterator<int>(n*timestep)+n, thrust::constant_iterator<bool>(timestep == this->curMaxSeqLength()-1)+n, thrust::constant_iterator<bool>(!timestep)+n, thrust::constant_iterator<bool>(timestep >= this->curMinSeqLength())+n)),
                 fn
                 );
         }
@@ -519,13 +530,13 @@ void RNNLayer<TDevice>::computeBackwardPass() {
             for (int timestep = 0; timestep < this->curMaxSeqLength(); ++timestep) {
                 // collect errors from previous timestep
                 if (timestep != 0) {
-                    m_bw.timestepMatrices[timestep].hiddenTmpErrors.addProduct(m_bw.weightMatrices.igInternal, false, m_bw.timestepMatrices[timestep-1].igDeltas, false);
+                    m_bw.timestepMatrices[timestep].tmpErrors.addProduct(m_bw.weightMatrices.igInternal, false, m_bw.timestepMatrices[timestep-1].igDeltas, false);
                 }
 
                 // compute errors
                 thrust::for_each(
-                    thrust::make_zip_iterator(thrust::make_tuple(m_bw.hiddenTmpErrors.begin() + n*timestep,   thrust::counting_iterator<int>(n*timestep),   thrust::constant_iterator<bool>(!timestep),   thrust::constant_iterator<bool>(timestep == this->curMaxSeqLength()-1),   thrust::constant_iterator<bool>(timestep >= this->curMinSeqLength()))),
-                    thrust::make_zip_iterator(thrust::make_tuple(m_bw.hiddenTmpErrors.begin() + n*timestep+n, thrust::counting_iterator<int>(n*timestep)+n, thrust::constant_iterator<bool>(!timestep)+n, thrust::constant_iterator<bool>(timestep == this->curMaxSeqLength()-1)+n, thrust::constant_iterator<bool>(timestep >= this->curMinSeqLength())+n)),
+                    thrust::make_zip_iterator(thrust::make_tuple(m_bw.tmpErrors.begin() + n*timestep,   thrust::counting_iterator<int>(n*timestep),   thrust::constant_iterator<bool>(!timestep),   thrust::constant_iterator<bool>(timestep == this->curMaxSeqLength()-1),   thrust::constant_iterator<bool>(timestep >= this->curMinSeqLength()))),
+                    thrust::make_zip_iterator(thrust::make_tuple(m_bw.tmpErrors.begin() + n*timestep+n, thrust::counting_iterator<int>(n*timestep)+n, thrust::constant_iterator<bool>(!timestep)+n, thrust::constant_iterator<bool>(timestep == this->curMaxSeqLength()-1)+n, thrust::constant_iterator<bool>(timestep >= this->curMinSeqLength())+n)),
                     fn
                     );
             }
@@ -539,7 +550,7 @@ void RNNLayer<TDevice>::computeBackwardPass() {
             helpers::Matrix<TDevice> plErrorsMatrix(&pl->outputErrors(), pl->size(), this->curMaxSeqLength() * this->parallelSequences());
 
             // forward states
-            plErrorsMatrix.addProduct   (m_fw.weightMatrices.igInput, false, m_fw.igDeltasMatrix, false);
+            plErrorsMatrix.assignProduct(m_fw.weightMatrices.igInput, false, m_fw.igDeltasMatrix, false);
 
             // backward states
             if (m_isBidirectional) {
@@ -561,24 +572,22 @@ void RNNLayer<TDevice>::computeBackwardPass() {
         fn.internalWeightsOffset = fn.biasWeightsOffset + this->size();
         fn.bias                  = this->bias();
         fn.plOutputs             = helpers::getRawPointer(this->precedingLayer().outputs());
-        fn.fwOutputs             = helpers::getRawPointer(m_fw.hiddenTmpOutputs);
-        fn.bwOutputs             = helpers::getRawPointer(m_bw.hiddenTmpOutputs);
+        fn.fwOutputs             = helpers::getRawPointer(m_fw.tmpOutputs);
+        fn.bwOutputs             = helpers::getRawPointer(m_bw.tmpOutputs);
         fn.fwIgDeltas            = helpers::getRawPointer(m_fw.igDeltas);
         fn.bwIgDeltas            = helpers::getRawPointer(m_bw.igDeltas);
 
         thrust::transform(
-                    thrust::constant_iterator<int>(0),
-                    thrust::constant_iterator<int>(0) + this->_weightUpdates().size(),
+                    thrust::counting_iterator<int>(0),
+                    thrust::counting_iterator<int>(0) + this->_weightUpdates().size(),
                     this->_weightUpdates().begin(),
                     fn);
     }}
-
     // re-swap the output errors and the tmp output errors of the forward pass
     if (!m_isBidirectional) {
-        this->outputErrors().swap(m_fw.hiddenTmpErrors);
-        this->_outputs()    .swap(m_fw.hiddenTmpOutputs);
+        this->outputErrors().swap(m_fw.tmpErrors);
+        this->_outputs()    .swap(m_fw.tmpOutputs);
     }
-
 }
 
 template <typename TDevice>
