@@ -36,6 +36,7 @@ class Configuration
 public:
     enum optimizer_type_t {
         OPTIMIZER_STEEPESTDESCENT,
+        OPTIMIZER_BFGS,
         OPTIMIZER_RPROP
     };
 
@@ -92,6 +93,12 @@ private:
     real_t m_testFraction;
     real_t m_featurePeriod;
 
+    // lbfgs-specific
+    int m_storageSize;
+    real_t m_wolfeStepCoeff;
+    real_t m_wolfeGradCoeff;
+    real_t m_lineSearchStep;
+
     int m_inputLeftContext;
     int m_inputRightContext;
     int m_outputTimeLag;
@@ -131,7 +138,7 @@ public:
 
     /**
      * Returns a string that contains all options
-     * 
+     *
      * @return A string that contains all options
      */
     const std::string& serializedOptions() const;
@@ -171,7 +178,7 @@ public:
     /**
      * Returns true if shuffling of sequences within and across fractions is enabled
      *
-     * If this option is enabled, the sequences are shuffled before each training epoch, 
+     * If this option is enabled, the sequences are shuffled before each training epoch,
      * resulting in a completely randomized distribution of sequences across the fractions.
      *
      * @return True if shuffling of sequences is enabled
@@ -193,7 +200,7 @@ public:
      * @return True if autosave is enabled
      */
     bool autosave() const;
-    
+
     /**
       * Returns true if autosave at best validation error is enabled
       *
@@ -301,7 +308,7 @@ public:
 
     /**
      * Returns the sequence length to which the training set is truncated
-     * 
+     *
      * @return sequence truncation length
      */
     unsigned truncateSeqLength() const;
@@ -457,6 +464,34 @@ public:
      * @return The autosave file from which training will continue
      */
     const std::string& continueFile() const;
+
+    /**
+     * Returns the storage size for l-bfsg optimizer
+     *
+     * @return The storage size for l-bfsg optimizer
+     */
+    int storageSize() const;
+
+    /**
+     * Returns the wolfe conditions coefficient for line search, performed by l-bfgs optimizer
+     *
+     * @return The wolfe conditions coefficient for line search, performed by l-bfgs optimizer
+     */
+    real_t wolfeStepCoeff() const;
+
+    /**
+     * Returns the wolfe conditions coefficient for line search, performed by l-bfgs optimizer
+     *
+     * @return The wolfe conditions coefficient for line search, performed by l-bfgs optimizer
+     */
+    real_t wolfeGradCoeff() const;
+
+    /**
+     * Returns the search step for line search, performed by l-bfgs optimizer
+     *
+     * @return The search step for line search, performed by l-bfgs optimizer
+     */
+    real_t lineSearchStep() const;
 };
 
 

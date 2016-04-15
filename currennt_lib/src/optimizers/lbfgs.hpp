@@ -1,5 +1,4 @@
 #include "Optimizer.hpp"
-#include "../helpers/Matrix.hpp"
 
 namespace optimizers {
 
@@ -20,7 +19,12 @@ public:
             int maxEpochs,
             int maxEpochsNoBest,
             int validateEvery,
-            int testEvery
+            int testEvery,
+            real_t learningRate,
+            int storageSize,
+            real_t wolfeStepCoeff,
+            real_t wolfeGradCoeff,
+            real_t lineSearchStep
             );
 
     ~Lbfgs();
@@ -30,14 +34,18 @@ public:
 private:
     void _writeWeights(real_vector &input);
     void _readDerivatives(real_vector &output);
-    real_vector mInversedHessian;
     real_vector mUpdateDirection;
     real_vector mDerivatives;
     real_vector mWeights;
-    helpers::Matrix<TDevice> mInversedHessianMatrix;
-    helpers::Matrix<TDevice> mUpdateDirectionMatrix;
-    helpers::Matrix<TDevice> mWeigthsMatrix;
-    helpers::Matrix<TDevice> mGradMatrix;
     int mNumberOfWeights;
+    int m_rememberLast;
+    // first element of the pair is previous update
+    // second element of the pair is previous gradient difference
+    // most recent pair is first
+    std::vector<std::pair<real_vector, real_vector> > storage;
+    real_t m_learnRate;
+    real_t m_wolfeStepCoeff;
+    real_t m_wolfeGradCoeff;
+    real_t m_lineSearchStep;
 };
 }

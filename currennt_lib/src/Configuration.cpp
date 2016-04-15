@@ -44,7 +44,7 @@ Configuration *Configuration::ms_instance = NULL;
 
 namespace internal {
 
-std::string serializeOptions(const po::variables_map &vm) 
+std::string serializeOptions(const po::variables_map &vm)
 {
     std::string s;
 
@@ -141,7 +141,7 @@ Configuration::Configuration(int argc, const char *argv[])
     po::options_description trainingOptions("Training options");
     trainingOptions.add_options()
         ("train",               po::value(&m_trainingMode)     ->default_value(false),                 "enables the training mode")
-        ("stochastic", po::value(&m_hybridOnlineBatch)->default_value(false),                 "enables weight updates after every mini-batch of parallel calculated sequences")
+        ("stochastic",          po::value(&m_hybridOnlineBatch)->default_value(false),                 "enables weight updates after every mini-batch of parallel calculated sequences")
         ("hybrid_online_batch", po::value(&m_hybridOnlineBatch)->default_value(false),                 "same as --stochastic (for compatibility)")
         ("shuffle_fractions",   po::value(&m_shuffleFractions) ->default_value(false),                 "shuffles mini-batches in stochastic gradient descent")
         ("shuffle_sequences",   po::value(&m_shuffleSequences) ->default_value(false),                 "shuffles sequences within and across mini-batches")
@@ -150,10 +150,14 @@ Configuration::Configuration(int argc, const char *argv[])
         ("validate_every",      po::value(&m_validateEvery)    ->default_value(1),                     "sets the number of epochs until the validation error is computed")
         ("test_every",          po::value(&m_testEvery)        ->default_value(1),                     "sets the number of epochs until the test error is computed")
         ("optimizer",           po::value(&optimizerString)    ->default_value("steepest_descent"),    "sets the optimizer used for updating the weights")
-        ("learning_rate",       po::value(&m_learningRate)     ->default_value((real_t)1e-5, "1e-5"),  "sets the learning rate for the steepest descent optimizer")
+        ("learning_rate",       po::value(&m_learningRate)     ->default_value((real_t)1e-5, "1e-5"),  "sets the learning rate for the optimizer")
         ("momentum",            po::value(&m_momentum)         ->default_value((real_t)0.9,  "0.9"),   "sets the momentum for the steepest descent optimizer")
-        ("weight_noise_sigma",  po::value(&m_weightNoiseSigma)  ->default_value((real_t)0), "sets the standard deviation of the weight noise added for the gradient calculation on every batch")
+        ("weight_noise_sigma",  po::value(&m_weightNoiseSigma) ->default_value((real_t)0),             "sets the standard deviation of the weight noise added for the gradient calculation on every batch")
         ("save_network",        po::value(&m_trainedNetwork)   ->default_value("trained_network.jsn"), "sets the file name of the trained network that will be produced")
+        ("storage_size",        po::value(&m_storageSize)      ->default_value((int)10, "10"),         "sets the storage size for l-bfsg optimizer")
+        ("wolfe_step_coeff",    po::value(&m_wolfeStepCoeff)   ->default_value((real_t)1e-4, "1e-4"),  "sets the wolfe conditions coefficient for line search, performed by l-bfgs optimizer")
+        ("wolfe_grad_coeff",    po::value(&m_wolfeGradCoeff)   ->default_value((real_t)0.9, "0.9"),    "sets the wolfe conditions coefficient for line search, performed by l-bfgs optimizer")
+        ("line_search_step",    po::value(&m_lineSearchStep)   ->default_value((real_t)2, "2"),        "sets the search step for line search, performed by l-bfgs optimizer")
         ;
 
     po::options_description autosaveOptions("Autosave options");
@@ -266,8 +270,10 @@ Configuration::Configuration(int argc, const char *argv[])
         m_optimizer = OPTIMIZER_RPROP;
     else if (optimizerString == "steepest_descent")
         m_optimizer = OPTIMIZER_STEEPESTDESCENT;
+    else if (optimizerString == "lbfgs")
+        m_optimizer = OPTIMIZER_BFGS;
     else {
-        std::cout << "ERROR: Invalid optimizer. Possible values: steepest_descent, rprop." << std::endl;
+        std::cout << "ERROR: Invalid optimizer. Possible values: steepest_descent, rprop, lbfgs." << std::endl;
         exit(1);
     }
 
@@ -345,7 +351,7 @@ Configuration::Configuration(int argc, const char *argv[])
             std::cout << " after " << m_maxEpochs << " epochs or";
         std::cout << " if there is no new lowest validation error within " << m_maxEpochsNoBest << " epochs." << std::endl;
     }
-    
+
     if (m_autosave) {
         std::cout << "Autosave after EVERY EPOCH enabled." << std::endl;
     }
@@ -458,6 +464,26 @@ real_t Configuration::learningRate() const
     return m_learningRate;
 }
 
+int Configuration::storageSize() const
+{
+    return m_storageSize;
+}
+
+real_t Configuration::wolfeStepCoeff() const
+{
+    return m_wolfeStepCoeff;
+}
+
+real_t Configuration::wolfeGradCoeff() const
+{
+    return m_wolfeGradCoeff;
+}
+
+real_t Configuration::lineSearchStep() const
+{
+    return m_lineSearchStep;
+}
+
 real_t Configuration::momentum() const
 {
     return m_momentum;
@@ -535,7 +561,7 @@ int Configuration::inputRightContext() const
 }
 
 int Configuration::outputTimeLag() const
-{   
+{
     return m_outputTimeLag;
 }
 

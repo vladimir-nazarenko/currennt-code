@@ -44,7 +44,6 @@ namespace layers {
         const int    m_inputWeightsPerBlock;
         const int    m_internalWeightsPerBlock;
         const real_t m_bias;
-	// FIX ME
         const real_t m_learningRate;
 
         real_vector m_outputErrors;
@@ -67,7 +66,7 @@ namespace layers {
         TrainableLayer(
             const helpers::JsonValue &layerChild,
             const helpers::JsonValue &weightsSection,
-            int                       inputWeightsPerBlock, 
+            int                       inputWeightsPerBlock,
             int                       internalWeightsPerBlock,
             Layer<TDevice>           &precedingLayer
             );
@@ -135,7 +134,7 @@ namespace layers {
 
         /**
          * Adds Gaussian weight noise with the given standard deviation.
-         * 
+         *
          * @param sigma the standard deviation of the Gaussian weight noise
          *
          * @return void

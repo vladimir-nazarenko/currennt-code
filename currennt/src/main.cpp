@@ -26,6 +26,7 @@
 #include "../../currennt_lib/src/layers/BinaryClassificationLayer.hpp"
 #include "../../currennt_lib/src/layers/MulticlassClassificationLayer.hpp"
 #include "../../currennt_lib/src/optimizers/SteepestDescentOptimizer.hpp"
+#include "../../currennt_lib/src/optimizers/lbfgs.hpp"
 #include "../../currennt_lib/src/helpers/JsonClasses.hpp"
 #include "../../currennt_lib/src/rapidjson/prettywriter.h"
 #include "../../currennt_lib/src/rapidjson/filestream.h"
@@ -58,7 +59,7 @@ void swap32 (uint32_t *p)
   temp = *( q + 1 ); *( q + 1 ) = *( q + 2 ); *( q + 2 ) = temp;
 }
 
-void swap16 (uint16_t *p) 
+void swap16 (uint16_t *p)
 {
   uint8_t temp, *q;
   q = (uint8_t*) p;
@@ -98,7 +99,7 @@ template <typename TDevice>
 int trainerMain(const Configuration &config)
 {
     try {
-        // read the neural network description file 
+        // read the neural network description file
         std::string networkFile = config.continueFile().empty() ? config.networkFile() : config.continueFile();
         printf("Reading network from '%s'... ", networkFile.c_str());
         fflush(stdout);
@@ -115,10 +116,10 @@ int trainerMain(const Configuration &config)
 
         if (config.trainingMode()) {
             trainingSet = loadDataSet(DATA_SET_TRAINING);
-            
+
             if (!config.validationFiles().empty())
                 validationSet = loadDataSet(DATA_SET_VALIDATION);
-            
+
             if (!config.testFiles().empty())
                 testSet = loadDataSet(DATA_SET_TEST);
         }
@@ -134,8 +135,8 @@ int trainerMain(const Configuration &config)
             maxSeqLength = feedForwardSet->maxSeqLength();
 
         int parallelSequences = config.parallelSequences();
-       
-        // modify input and output size in netDoc to match the training set size 
+
+        // modify input and output size in netDoc to match the training set size
         // trainingSet->inputPatternSize
         // trainingSet->outputPatternSize
 
@@ -173,17 +174,27 @@ int trainerMain(const Configuration &config)
         if (config.trainingMode()) {
             printf("Creating the optimizer... ");
             fflush(stdout);
-            boost::scoped_ptr<optimizers::Optimizer<TDevice> > optimizer;
-            optimizers::SteepestDescentOptimizer<TDevice> *sdo;
+            boost::scoped_ptr<optimizers::Optimizer<TDevice> > opt_ptr;
+            optimizers::Optimizer<TDevice> *optimizer;
 
             switch (config.optimizer()) {
             case Configuration::OPTIMIZER_STEEPESTDESCENT:
-                sdo = new optimizers::SteepestDescentOptimizer<TDevice>(
+                optimizer = new optimizers::SteepestDescentOptimizer<TDevice>(
                     neuralNetwork, *trainingSet, *validationSet, *testSet,
                     config.maxEpochs(), config.maxEpochsNoBest(), config.validateEvery(), config.testEvery(),
                     config.learningRate(), config.momentum()
                     );
-                optimizer.reset(sdo);
+                opt_ptr.reset(optimizer);
+                break;
+
+            case Configuration::OPTIMIZER_BFGS:
+                optimizer = new optimizers::Lbfgs<TDevice>(
+                            neuralNetwork, *trainingSet, *validationSet, *testSet,
+                            config.maxEpochs(), config.maxEpochsNoBest(), config.validateEvery(), config.testEvery(),
+                            config.learningRate(), config.storageSize(), config.wolfeStepCoeff(),
+                            config.wolfeGradCoeff(), config.lineSearchStep()
+                            );
+                opt_ptr.reset(optimizer);
                 break;
 
             default:
@@ -218,7 +229,7 @@ int trainerMain(const Configuration &config)
 
                 // train for one epoch and measure the time
                 infoRows += printfRow(" %5d | ", optimizer->currentEpoch() + 1);
-                
+
                 boost::posix_time::ptime startTime = boost::posix_time::microsec_clock::local_time();
                 finished = optimizer->train();
                 boost::posix_time::ptime endTime = boost::posix_time::microsec_clock::local_time();
@@ -229,7 +240,7 @@ int trainerMain(const Configuration &config)
                     infoRows += printfRow(errFormat, (double)optimizer->curTrainingClassError()*100.0, (double)optimizer->curTrainingError());
                 else
                     infoRows += printfRow(errFormat, (double)optimizer->curTrainingError());
-                
+
                 if (!validationSet->empty() && optimizer->currentEpoch() % config.validateEvery() == 0) {
                     if (classificationTask)
                         infoRows += printfRow(errFormat, (double)optimizer->curValidationClassError()*100.0, (double)optimizer->curValidationError());
@@ -309,9 +320,9 @@ int trainerMain(const Configuration &config)
             Cpu::real_vector outputStdevs = feedForwardSet->outputStdevs();
             assert (outputMeans.size()  == feedForwardSet->outputPatternSize());
             assert (outputStdevs.size() == feedForwardSet->outputPatternSize());
-            //for (int i = 0; i < outputMeans.size(); ++i) 
+            //for (int i = 0; i < outputMeans.size(); ++i)
              //   printf("outputMeans[%d] = %f outputStdevs[%d] = %f\n", i, outputMeans[i], i, outputStdevs[i]);
-            bool unstandardize = config.revertStd(); 
+            bool unstandardize = config.revertStd();
             if (unstandardize) {
                 printf("Outputs will be scaled by mean and standard deviation specified in NC file.\n");
             }
@@ -351,7 +362,7 @@ int trainerMain(const Configuration &config)
                                     v *= outputStdevs[outputIdx];
                                     v += outputMeans[outputIdx];
                                 }
-                                file << ';' << v; 
+                                file << ';' << v;
                             }
                         }
 
@@ -402,7 +413,7 @@ int trainerMain(const Configuration &config)
                                 }
                                 if (outputIdx > 0)
                                     file << ';';
-                                file << v; 
+                                file << v;
                             }
                             file << '\n';
                         }
@@ -473,7 +484,7 @@ int trainerMain(const Configuration &config)
                                         v *= outputStdevs[outputIdx];
                                         v += outputMeans[outputIdx];
                                     }
-                                    swapFloat(&v); 
+                                    swapFloat(&v);
                                     file.write((const char*)&v, sizeof(float));
                                 }
                             }
@@ -484,7 +495,7 @@ int trainerMain(const Configuration &config)
                     printf(" done.\n");
                 }
             }
-            if (feedForwardSet != boost::shared_ptr<data_sets::DataSet>()) 
+            if (feedForwardSet != boost::shared_ptr<data_sets::DataSet>())
                 std::cout << "Removing cache file: " << feedForwardSet->cacheFileName() << std::endl;
             boost::filesystem::remove(feedForwardSet->cacheFileName());
         } // evaluation mode
@@ -551,7 +562,7 @@ void readJsonFile(rapidjson::Document *doc, const std::string &filename)
     std::ifstream ifs(filename.c_str(), std::ios::binary);
     if (!ifs.good())
         throw std::runtime_error("Cannot open file");
- 
+
     // calculate the file size in bytes
     ifs.seekg(0, std::ios::end);
     size_t size = ifs.tellg();
@@ -626,7 +637,7 @@ boost::shared_ptr<data_sets::DataSet> loadDataSet(data_set_type dsType)
     //std::cout << "truncating to " << truncSeqLength << std::endl;
     boost::shared_ptr<data_sets::DataSet> ds = boost::make_shared<data_sets::DataSet>(
         filenames,
-        Configuration::instance().parallelSequences(), fraction, truncSeqLength, 
+        Configuration::instance().parallelSequences(), fraction, truncSeqLength,
         fracShuf, seqShuf, noiseDev, cachePath);
 
     printf("done.\n");
@@ -662,7 +673,7 @@ void printLayers(const NeuralNetwork<TDevice> &nn)
 }
 
 
-template <typename TDevice> 
+template <typename TDevice>
 void printOptimizer(const Configuration &config, const optimizers::Optimizer<TDevice> &optimizer)
 {
     if (dynamic_cast<const optimizers::SteepestDescentOptimizer<TDevice>*>(&optimizer)) {
@@ -678,7 +689,7 @@ void printOptimizer(const Configuration &config, const optimizers::Optimizer<TDe
 }
 
 
-template <typename TDevice> 
+template <typename TDevice>
 void saveNetwork(const NeuralNetwork<TDevice> &nn, const std::string &filename)
 {
     rapidjson::Document jsonDoc;
@@ -698,7 +709,7 @@ void saveNetwork(const NeuralNetwork<TDevice> &nn, const std::string &filename)
 }
 
 
-template <typename TDevice> 
+template <typename TDevice>
 void saveState(const NeuralNetwork<TDevice> &nn, const optimizers::Optimizer<TDevice> &optimizer, const std::string &infoRows)
 {
     // create the JSON document
@@ -718,10 +729,10 @@ void saveState(const NeuralNetwork<TDevice> &nn, const optimizers::Optimizer<TDe
 
     // add the state of the optimizer
     optimizer.exportState(&jsonDoc);
-    
+
     // open the file
     std::stringstream autosaveFilename;
-    std::string prefix = Configuration::instance().autosavePrefix(); 
+    std::string prefix = Configuration::instance().autosavePrefix();
     autosaveFilename << prefix;
     if (!prefix.empty())
         autosaveFilename << '_';
@@ -741,7 +752,7 @@ void saveState(const NeuralNetwork<TDevice> &nn, const optimizers::Optimizer<TDe
 }
 
 
-template <typename TDevice> 
+template <typename TDevice>
 void restoreState(NeuralNetwork<TDevice> *nn, optimizers::Optimizer<TDevice> *optimizer, std::string *infoRows)
 {
     rapidjson::Document jsonDoc;

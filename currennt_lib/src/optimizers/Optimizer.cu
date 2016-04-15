@@ -47,17 +47,6 @@ namespace optimizers {
             m_neuralNetwork.computeForwardPass();
             error += m_neuralNetwork.calculateError();
 
-            // weight noise:
-            std::vector<Cpu::real_vector> origWeights(m_neuralNetwork.layers().size());
-            if (Configuration::instance().weightNoiseSigma() > 0) {
-                for (size_t i = 1; i < m_neuralNetwork.layers().size()-1; ++i) {
-                    layers::TrainableLayer<TDevice> *layer = dynamic_cast<layers::TrainableLayer<TDevice>*>(m_neuralNetwork.layers()[i].get());
-                    if (layer) {
-                        origWeights[i] = layer->weights();
-                        layer->injectWeightNoise(Configuration::instance().weightNoiseSigma());
-                    }
-                }
-            }
             // compute the backward pass and accumulate the weight updates
             m_neuralNetwork.computeBackwardPass();
 
@@ -65,19 +54,19 @@ namespace optimizers {
                 layers::TrainableLayer<TDevice> *layer = dynamic_cast<layers::TrainableLayer<TDevice>*>(m_neuralNetwork.layers()[i].get());
                 if (!layer)
                     continue;
+//                std::cout << "WU(" << thrust::reduce(layer->weightUpdates().begin(), layer->weightUpdates().end()) << ")";
 
-                if (!firstFraction && !Configuration::instance().hybridOnlineBatch())
+                if (!firstFraction)
                     thrust::transform(layer->weightUpdates().begin(), layer->weightUpdates().end(), m_curWeightUpdates[i].begin(), m_curWeightUpdates[i].begin(), thrust::plus<real_t>());
                 else
                     thrust::copy(layer->weightUpdates().begin(), layer->weightUpdates().end(), m_curWeightUpdates[i].begin());
-
-                // restore old weights before update in case of weight noise
-                if (Configuration::instance().weightNoiseSigma() > 0.0)
-                    thrust::copy(origWeights[i].begin(), origWeights[i].end(), layer->weights().begin());
             }
 
             firstFraction = false;
         }
+
+//        std::cout << "TOTALWU1(" << thrust::reduce(this->m_curWeightUpdates[1].begin(), this->m_curWeightUpdates[1].end()) << ")";
+//        std::cout << "TOTALWU2(" << thrust::reduce(this->m_curWeightUpdates[2].begin(), this->m_curWeightUpdates[2].end()) << ")";
 
         error /= this->m_trainingSet.totalSequences();
 
@@ -103,7 +92,7 @@ namespace optimizers {
                 *classError -= (real_t)static_cast<layers::BinaryClassificationLayer<TDevice>&>(m_neuralNetwork.postOutputLayer()).countCorrectClassifications();
             if (dynamic_cast<layers::MulticlassClassificationLayer<TDevice>*>(&m_neuralNetwork.postOutputLayer()))
                 *classError -= (real_t)static_cast<layers::MulticlassClassificationLayer<TDevice>&>(m_neuralNetwork.postOutputLayer()).countCorrectClassifications();
-            
+
             if (calcWeightUpdates) {
                 // weight noise:
                 std::vector<Cpu::real_vector> origWeights(m_neuralNetwork.layers().size());
@@ -127,7 +116,7 @@ namespace optimizers {
                     if (!firstFraction && !Configuration::instance().hybridOnlineBatch())
                         thrust::transform(layer->weightUpdates().begin(), layer->weightUpdates().end(), m_curWeightUpdates[i].begin(), m_curWeightUpdates[i].begin(), thrust::plus<real_t>());
                     else
-                    	thrust::copy(layer->weightUpdates().begin(), layer->weightUpdates().end(), m_curWeightUpdates[i].begin());
+                        thrust::copy(layer->weightUpdates().begin(), layer->weightUpdates().end(), m_curWeightUpdates[i].begin());
 
                     // restore old weights before update in case of weight noise
                     if (Configuration::instance().weightNoiseSigma() > 0.0)
@@ -142,15 +131,17 @@ namespace optimizers {
             firstFraction = false;
         }
 
-        // update weights for batch learning
-        if (calcWeightUpdates && !Configuration::instance().hybridOnlineBatch())
-            _updateWeights();
-
         // normalize the errors
         error /= ds.totalSequences();
         *classError /= (real_t)ds.totalTimesteps();
 
-        m_curTrainingError = error;
+        // required by lbfgs
+        if(calcWeightUpdates)
+            m_curTrainingError = error;
+
+        // update weights for batch learning
+        if (calcWeightUpdates && !Configuration::instance().hybridOnlineBatch())
+            _updateWeights();
 
         return error;
     }
@@ -205,8 +196,8 @@ namespace optimizers {
     {
         for (size_t i = 1; i < m_neuralNetwork.layers().size() - 1; ++i) {
             layers::TrainableLayer<TDevice> *layer = dynamic_cast<layers::TrainableLayer<TDevice>*>(m_neuralNetwork.layers()[i].get());
-            if (layer) 
-            	thrust::copy(layer->weights().begin(), layer->weights().end(), m_bestWeights[i].begin());
+            if (layer)
+                thrust::copy(layer->weights().begin(), layer->weights().end(), m_bestWeights[i].begin());
         }
     }
 
@@ -214,9 +205,9 @@ namespace optimizers {
     void Optimizer<TDevice>::_restoreWeights()
     {
         for (size_t i = 1; i < m_neuralNetwork.layers().size() - 1; ++i) {
-        	layers::TrainableLayer<TDevice> *layer = dynamic_cast<layers::TrainableLayer<TDevice>*>(m_neuralNetwork.layers()[i].get());
+            layers::TrainableLayer<TDevice> *layer = dynamic_cast<layers::TrainableLayer<TDevice>*>(m_neuralNetwork.layers()[i].get());
             if (layer)
-            	thrust::copy(m_bestWeights[i].begin(), m_bestWeights[i].end(), layer->weights().begin());
+                thrust::copy(m_bestWeights[i].begin(), m_bestWeights[i].end(), layer->weights().begin());
         }
     }
 
@@ -239,7 +230,7 @@ namespace optimizers {
     }
 
     template <typename TDevice>
-    Optimizer<TDevice>::Optimizer(NeuralNetwork<TDevice> &neuralNetwork, data_sets::DataSet &trainingSet, 
+    Optimizer<TDevice>::Optimizer(NeuralNetwork<TDevice> &neuralNetwork, data_sets::DataSet &trainingSet,
                                    data_sets::DataSet &validationSet, data_sets::DataSet &testSet,
                                    int maxEpochs, int maxEpochsNoBest, int validateEvery, int testEvery)
         : m_neuralNetwork             (neuralNetwork)
@@ -264,7 +255,7 @@ namespace optimizers {
         // initialize the best weights vectors
         m_bestWeights.resize(m_neuralNetwork.layers().size());
         for (size_t i = 1; i < m_neuralNetwork.layers().size()-1; ++i) {
-        	layers::TrainableLayer<TDevice> *layer = dynamic_cast<layers::TrainableLayer<TDevice>*>(m_neuralNetwork.layers()[i].get());
+            layers::TrainableLayer<TDevice> *layer = dynamic_cast<layers::TrainableLayer<TDevice>*>(m_neuralNetwork.layers()[i].get());
             if (layer)
                 m_bestWeights[i] = layer->weights();
         }
@@ -350,7 +341,7 @@ namespace optimizers {
             // calculate the validation error and store the weights if we a new lowest error
             if (!m_validationSet.empty() && m_curEpoch % m_validateEvery == 0) {
                 m_curValidationError = _processDataSet(m_validationSet, false, &m_curValidationClassError);
-                
+
                 if (m_curValidationError < m_lowestValidationError) {
                     m_lowestValidationError  = m_curValidationError;
                     m_epochsSinceLowestError = 0;
@@ -370,7 +361,7 @@ namespace optimizers {
             if (!m_testSet.empty() && m_curEpoch % m_testEvery == 0)
                 m_curTestError = _processDataSet(m_testSet, false, &m_curTestClassError);
 
-            // check if we did not get a new lowest error for some training epochs 
+            // check if we did not get a new lowest error for some training epochs
             // or if we reached the maximum number of training epochs
             if (m_epochsSinceLowestError >= m_maxEpochsNoBest || (m_maxEpochs >= 0 && m_curEpoch >= m_maxEpochs)) {
                 _restoreWeights();

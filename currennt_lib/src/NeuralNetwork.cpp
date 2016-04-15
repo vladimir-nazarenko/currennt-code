@@ -35,7 +35,7 @@
 
 
 template <typename TDevice>
-NeuralNetwork<TDevice>::NeuralNetwork(const helpers::JsonDocument &jsonDoc, int parallelSequences, int maxSeqLength, 
+NeuralNetwork<TDevice>::NeuralNetwork(const helpers::JsonDocument &jsonDoc, int parallelSequences, int maxSeqLength,
                                       int inputSizeOverride = -1, int outputSizeOverride = -1)
 {
     try {
@@ -80,10 +80,10 @@ NeuralNetwork<TDevice>::NeuralNetwork(const helpers::JsonDocument &jsonDoc, int 
             }
 */
             try {
-            	layers::Layer<TDevice> *layer;
+                layers::Layer<TDevice> *layer;
 
                 if (m_layers.empty())
-                	layer = LayerFactory<TDevice>::createLayer(layerType, &*layerChild, weightsSection, parallelSequences, maxSeqLength);
+                    layer = LayerFactory<TDevice>::createLayer(layerType, &*layerChild, weightsSection, parallelSequences, maxSeqLength);
                 else
                     layer = LayerFactory<TDevice>::createLayer(layerType, &*layerChild, weightsSection, parallelSequences, maxSeqLength, m_layers.back().get());
 
@@ -221,7 +221,7 @@ void NeuralNetwork<TDevice>::exportWeights(const helpers::JsonDocument& jsonDoc)
 
     // create the weight objects
     BOOST_FOREACH (const boost::shared_ptr<layers::Layer<TDevice> > &layer, m_layers) {
-    	layers::TrainableLayer<TDevice> *trainableLayer = dynamic_cast<layers::TrainableLayer<TDevice>*>(layer.get());
+        layers::TrainableLayer<TDevice> *trainableLayer = dynamic_cast<layers::TrainableLayer<TDevice>*>(layer.get());
         if (trainableLayer)
             trainableLayer->exportWeights(&weightsObject, &jsonDoc->GetAllocator());
     }
@@ -238,7 +238,7 @@ template <typename TDevice>
 std::vector<std::vector<std::vector<real_t> > > NeuralNetwork<TDevice>::getOutputs()
 {
     layers::TrainableLayer<TDevice> &ol = outputLayer();
-    
+
     std::vector<std::vector<std::vector<real_t> > > outputs;
     for (int patIdx = 0; patIdx < (int)ol.patTypes().size(); ++patIdx) {
         switch (ol.patTypes()[patIdx]) {

@@ -58,13 +58,13 @@ namespace internal {
         try {
             readNcDimension(ncid, dimName);
             return true;
-        } 
+        }
         catch (...) {
             return false;
         }
     }
 
-    std::string readNcStringArray(int ncid, const char *arrName, int arrIdx, int maxStringLength)
+    std::string readNcStringArray(int ncid, const char *arrName, size_t arrIdx, size_t maxStringLength)
     {
         int ret;
         int varid;
@@ -79,7 +79,7 @@ namespace internal {
         return std::string(buffer);
     }
 
-    int readNcIntArray(int ncid, const char *arrName, int arrIdx)
+    int readNcIntArray(int ncid, const char *arrName, size_t arrIdx)
     {
         int ret;
         int varid;
@@ -115,7 +115,7 @@ namespace internal {
     }
 
     template <typename T>
-    thrust::host_vector<T> readNcArray(int ncid, const char *arrName, int begin, int n)
+    thrust::host_vector<T> readNcArray(int ncid, const char *arrName, size_t begin, size_t n)
     {
         int ret;
         int varid;
@@ -129,7 +129,7 @@ namespace internal {
         return v;
     }
 
-    Cpu::real_vector readNcPatternArray(int ncid, const char *arrName, int begin, int n, int patternSize)
+    Cpu::real_vector readNcPatternArray(int ncid, const char *arrName, size_t begin, size_t n, size_t patternSize)
     {
         int ret;
         int varid;
@@ -193,7 +193,7 @@ namespace data_sets {
         boost::mutex              mutex;
         boost::condition_variable cv;
         bool                      terminate;
-        
+
         boost::function<boost::shared_ptr<DataSetFraction> ()> taskFn;
         boost::shared_ptr<DataSetFraction> frac;
         bool finished;
@@ -351,7 +351,7 @@ namespace data_sets {
                 for (int offset_in = -context_left; offset_in <= context_right; ++offset_in) {
                     int srcStart = m_inputPatternSize * (timestep + offset_in);
                     // duplicate first time step if needed
-                    if (srcStart < 0) 
+                    if (srcStart < 0)
                         srcStart = 0;
                     // duplicate last time step if needed
                     else if (srcStart > m_inputPatternSize * (seq.length - 1))
@@ -416,7 +416,7 @@ namespace data_sets {
     boost::shared_ptr<DataSetFraction> DataSet::_makeFirstFractionTask()
     {
         //printf("(%d) Making first task...\n", (int)m_sequences.size());
-        
+
         if (m_sequenceShuffling)
             _shuffleSequences();
         if (m_fractionShuffling)
@@ -474,7 +474,7 @@ namespace data_sets {
 
         // read the *.nc files
         for (std::vector<std::string>::const_iterator nc_itr = ncfiles.begin();
-            nc_itr != ncfiles.end(); ++nc_itr) 
+            nc_itr != ncfiles.end(); ++nc_itr)
         {
             std::vector<sequence_t> sequences;
 
@@ -498,7 +498,7 @@ namespace data_sets {
                 }
                 else {
                     if (m_isClassificationData) {
-                        if (!internal::hasNcDimension(ncid, "numLabels")) 
+                        if (!internal::hasNcDimension(ncid, "numLabels"))
                             throw std::runtime_error("Cannot combine classification with regression NC");
                         int numLabels = internal::readNcDimension(ncid, "numLabels");
                         if (m_outputPatternSize != (numLabels == 2 ? 1 : numLabels))
@@ -511,7 +511,7 @@ namespace data_sets {
                     if (m_inputPatternSize != internal::readNcDimension(ncid, "inputPattSize"))
                         throw std::runtime_error("Number of inputs mismatch in NC files");
                 }
-                
+
                 int nSeq = internal::readNcDimension(ncid, "numSeqs");
                 nSeq = (int)((real_t)nSeq * fraction);
                 nSeq = std::max(nSeq, 1);
@@ -529,12 +529,12 @@ namespace data_sets {
                         // why is this field needed??
                         seq.originalSeqIdx = k;
                         // keep a minimum sequence length of 50% of truncation length
-                        if (truncSeqLength > 0 && seqLength > 1.5 * truncSeqLength) 
+                        if (truncSeqLength > 0 && seqLength > 1.5 * truncSeqLength)
                             seq.length         = std::min(truncSeqLength, seqLength);
                         else
                             seq.length = seqLength;
                         // TODO append index k
-                        seq.seqTag         = seqTag; 
+                        seq.seqTag         = seqTag;
                         //std::cout << "sequence #" << nSeq << ": " << seq.length << " steps" << std::endl;
                         sequences.push_back(seq);
                         seqLength -= seq.length;

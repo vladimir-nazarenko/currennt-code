@@ -61,7 +61,7 @@ namespace {
             if (targetClass == -1)
                 return 0;
             else {
-                int outputIdx     = outputIdx = patIdx * layerSize + targetClass;
+                int outputIdx     = patIdx * layerSize + targetClass;
                 real_t targetProb = helpers::max(helpers::NumericLimits<real_t>::min(), outputs[outputIdx]);
                 return log(targetProb);
             }
@@ -175,7 +175,7 @@ namespace layers {
 
         return correctClassifications;
     }
-    
+
     template <typename TDevice>
     const std::string& MulticlassClassificationLayer<TDevice>::type() const
     {
