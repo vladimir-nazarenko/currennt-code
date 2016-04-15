@@ -10,16 +10,17 @@ INCLUDE_DIRECTORIES (${Boost_INCLUDE_DIR})
 
 LINK_DIRECTORIES (${Boost_LIBRARY_DIR})
 
-
 SET (CMAKE_BUILD_TYPE Debug)
-SET (CUDA_NVCC_FLAGS "${CUDA_NVCC_FLAGS} -arch=compute_20")
-SET (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-format-security")
+SET (CUDA_NVCC_FLAGS "${CUDA_NVCC_FLAGS} -arch=compute_20 -std=c++11")
+SET (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-format-security -std=c++11")
 
 FILE (GLOB_RECURSE src_lib     currennt_lib/src/*.cpp currennt_lib/src/*.hpp     currennt_lib/src/*.h     currennt_lib/src/*.cu     currennt_lib/src/*.cuh)
 FILE (GLOB_RECURSE src_trainer currennt/*.cpp     currennt/*.hpp         currennt/*.h         currennt/*.cu         currennt/*.cuh)
+
 
 CUDA_ADD_EXECUTABLE (${PROJECT_NAME} ${src_lib} ${src_trainer})
 
 CUDA_ADD_CUBLAS_TO_TARGET (${PROJECT_NAME})
 TARGET_LINK_LIBRARIES (${PROJECT_NAME} netcdf)
 TARGET_LINK_LIBRARIES (${PROJECT_NAME} ${Boost_LIBRARIES})
+target_compile_definitions(${PROJECT_NAME} PRIVATE USE_CUBLAS=1 THRUST_DEVICE_SYSTEM=THRUST_DEVICE_SYSTEM_CUDA)
