@@ -98,39 +98,54 @@ void Lbfgs<TDevice>::_updateWeights()
     // compute lbfgs update
     std::stack<real_t> prev_updates_by_gradient;
     std::stack<real_t> gradientByUpdate;
+    // q <- df/dw
     real_vector gradientUpdateAccumulator(mNumberOfWeights, 0);
     thrust::copy(mDerivatives.begin(), mDerivatives.end(), gradientUpdateAccumulator.begin());
     for(auto &pair : storage) {
+        // 1 / rho_i <- s_i * y_i
         real_t inner_product_s_stored_grad = thrust::inner_product(pair.first.begin(), pair.first.end(),  pair.second.begin(), 0.0f);
-        real_t inner_product_s_cur_grad    = thrust::inner_product(pair.first.begin(), pair.first.end(), mDerivatives.begin(), 0.0f);
+        // s_i * q
+        real_t inner_product_s_cur_grad    = thrust::inner_product(pair.first.begin(), pair.first.end(), gradientUpdateAccumulator.begin(), 0.0f);
+        // alpha_i <- rho_i * s_i * q
         real_t upd_by_grad = (1 / inner_product_s_stored_grad) * inner_product_s_cur_grad;
+
+        // push both values to stack to use in computing the hessian guess
         prev_updates_by_gradient.push(upd_by_grad);
         gradientByUpdate.push(inner_product_s_stored_grad);
 
+        // tmp <- -alpha_i * y_i
         real_vector tmp(mNumberOfWeights, 0);
         thrust::transform(pair.second.begin(), pair.second.end(), thrust::make_constant_iterator(-upd_by_grad), tmp.begin(), thrust::multiplies<float>());
+
+        // q <- q - alpha_i * y_i
         thrust::transform(gradientUpdateAccumulator.begin(), gradientUpdateAccumulator.end(), tmp.begin(), gradientUpdateAccumulator.begin(), thrust::plus<float>());
     }
 
     // given hessian initial guess is diagonal matrix
     real_vector hessian_guess_by_gradient(mNumberOfWeights, 0);
     real_t scale_factor = 1;
+    // gamma_k = s_k-1 * y_k-1/y_k-1*y_k-1
     if(storage.size() > 0) {
         scale_factor = thrust::inner_product((*storage.begin()).first.begin(), (*storage.begin()).first.end(), (*storage.begin()).second.begin(), 0.0f) /
                 thrust::inner_product((*storage.begin()).second.begin(), (*storage.begin()).second.end(), (*storage.begin()).second.begin(), 0.0f);
     }
+    // r <- H_K^0 * q
     thrust::transform(gradientUpdateAccumulator.begin(), gradientUpdateAccumulator.end(), thrust::make_constant_iterator(scale_factor),
                       hessian_guess_by_gradient.begin(), thrust::multiplies<float>());
 
     for(const auto & pair : boost::adaptors::reverse(storage)) {
-        real_t prevGradUpdateByCurrentGuess = (1 / gradientByUpdate.top()) * thrust::inner_product(pair.second.begin(), pair.second.end(), hessian_guess_by_gradient.begin(), 0.0f);
+        // beta <- rho_i*y_i*r
+        real_t prevGradUpdateByCurrentGuess = (1 / gradientByUpdate.top()) *
+                thrust::inner_product(pair.second.begin(), pair.second.end(), hessian_guess_by_gradient.begin(), 0.0f);
         gradientByUpdate.pop();
 
+        // tmp <- s_i * (alpha_i - beta)
         real_vector tmp(mNumberOfWeights, 0);
-
-        thrust::transform(pair.first.begin(), pair.first.end(), thrust::make_constant_iterator(prev_updates_by_gradient.top() - prevGradUpdateByCurrentGuess), tmp.begin(), thrust::multiplies<float>());
+        thrust::transform(pair.first.begin(), pair.first.end(),
+                          thrust::make_constant_iterator(prev_updates_by_gradient.top() - prevGradUpdateByCurrentGuess), tmp.begin(), thrust::multiplies<float>());
         prev_updates_by_gradient.pop();
 
+        // r <- r + tmp
         thrust::transform(hessian_guess_by_gradient.begin(), hessian_guess_by_gradient.end(), tmp.begin(), hessian_guess_by_gradient.begin(), thrust::plus<float>());
     }
 
@@ -145,7 +160,6 @@ void Lbfgs<TDevice>::_updateWeights()
     real_t newError = 0.0f;
     real_t gByD = 0.0f;
     real_t newGradByD = 0.0f;
-    // suppose that if alpha = 1 doesn't satisfy Wolfe conditions, we use it nevertheless
     do {
         curStep /= m_lineSearchStep;
 
@@ -168,10 +182,11 @@ void Lbfgs<TDevice>::_updateWeights()
         newGradByD = thrust::inner_product(mUpdateDirection.begin(), mUpdateDirection.end(), newGrad.begin(), 0.0f);
         // check the Wolfe conditions
     } while (!(newError <= errorFnValue + m_wolfeStepCoeff * curStep * gByD &&
-             std::fabs(newGradByD) >= -m_wolfeGradCoeff * gByD) && curStep > 0.0000001);
+             std::fabs(newGradByD) >= -m_wolfeGradCoeff * gByD) && curStep > 0.00001);
 
     // s = x_k+1 - x_k; y = g_k+1 - g_k
     real_vector s(mNumberOfWeights, 0);
+
     thrust::transform(mUpdateDirection.begin(), mUpdateDirection.end(), thrust::make_constant_iterator(curStep), s.begin(), thrust::multiplies<float>());
     real_vector y(mNumberOfWeights, 0);
     thrust::transform(newGrad.begin(), newGrad.end(), mDerivatives.begin(), y.begin(), thrust::minus<float>());
@@ -180,7 +195,7 @@ void Lbfgs<TDevice>::_updateWeights()
     thrust::transform(s.begin(), s.end(), mWeights.begin(), mWeights.begin(), thrust::plus<float>());
     _writeWeights(mWeights);
 
-    std::cout << "ALPHA:" << curStep << "\n";
+//    std::cout << "ALPHA:" << curStep << "\n";
 
     if(storage.size() == this->m_rememberLast) {
         storage.pop_back();
