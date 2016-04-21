@@ -192,7 +192,7 @@ int trainerMain(const Configuration &config)
                             neuralNetwork, *trainingSet, *validationSet, *testSet,
                             config.maxEpochs(), config.maxEpochsNoBest(), config.validateEvery(), config.testEvery(),
                             config.learningRate(), config.storageSize(), config.wolfeStepCoeff(),
-                            config.wolfeGradCoeff(), config.lineSearchStep()
+                            config.wolfeGradCoeff(), config.lineSearchStep(), config.learnRateForFirstIter()
                             );
                 opt_ptr.reset(optimizer);
                 break;

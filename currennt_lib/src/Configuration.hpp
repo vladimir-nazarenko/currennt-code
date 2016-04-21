@@ -98,6 +98,7 @@ private:
     real_t m_wolfeStepCoeff;
     real_t m_wolfeGradCoeff;
     real_t m_lineSearchStep;
+    real_t m_learnRateForFirstIter;
 
     int m_inputLeftContext;
     int m_inputRightContext;
@@ -492,6 +493,13 @@ public:
      * @return The search step for line search, performed by l-bfgs optimizer
      */
     real_t lineSearchStep() const;
+
+    /**
+     * Returns the learning rate to be used as start point in l-bfgs in first iteration
+     *
+     * @return The learning rate to be used as start point in l-bfgs in first iteration
+     */
+    real_t learnRateForFirstIter() const;
 };
 
 

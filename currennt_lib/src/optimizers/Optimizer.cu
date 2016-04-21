@@ -41,7 +41,9 @@ namespace optimizers {
 
         boost::shared_ptr<data_sets::DataSetFraction> frac;
         bool firstFraction = true;
-        while ((frac = this->m_trainingSet.getNextFraction())) {
+        while (Configuration::instance().hybridOnlineBatch() ?
+               frac = this->m_curDataSetFrac :
+               frac = this->m_trainingSet.getNextFraction()) {
             // compute forward pass and calculate the error
             m_neuralNetwork.loadSequences(*frac);
             m_neuralNetwork.computeForwardPass();
@@ -54,7 +56,6 @@ namespace optimizers {
                 layers::TrainableLayer<TDevice> *layer = dynamic_cast<layers::TrainableLayer<TDevice>*>(m_neuralNetwork.layers()[i].get());
                 if (!layer)
                     continue;
-//                std::cout << "WU(" << thrust::reduce(layer->weightUpdates().begin(), layer->weightUpdates().end()) << ")";
 
                 if (!firstFraction)
                     thrust::transform(layer->weightUpdates().begin(), layer->weightUpdates().end(), m_curWeightUpdates[i].begin(), m_curWeightUpdates[i].begin(), thrust::plus<real_t>());
@@ -63,12 +64,14 @@ namespace optimizers {
             }
 
             firstFraction = false;
+            if(Configuration::instance().hybridOnlineBatch())
+                break;
         }
 
-//        std::cout << "TOTALWU1(" << thrust::reduce(this->m_curWeightUpdates[1].begin(), this->m_curWeightUpdates[1].end()) << ")";
-//        std::cout << "TOTALWU2(" << thrust::reduce(this->m_curWeightUpdates[2].begin(), this->m_curWeightUpdates[2].end()) << ")";
-
-        error /= this->m_trainingSet.totalSequences();
+        if(Configuration::instance().hybridOnlineBatch())
+            error /= m_curDataSetFrac->numSequences();
+        else
+            error /= this->m_trainingSet.totalSequences();
 
         return error;
     }
@@ -78,15 +81,21 @@ namespace optimizers {
     {
         // process all data set fractions
         real_t error = 0;
+        real_t curError = 0;
         *classError = (real_t) ds.totalTimesteps();
 
         boost::shared_ptr<data_sets::DataSetFraction> frac;
         bool firstFraction = true;
         while ((frac = ds.getNextFraction())) {
+            m_curDataSetFrac = frac;
             // compute forward pass and calculate the error
             m_neuralNetwork.loadSequences(*frac);
             m_neuralNetwork.computeForwardPass();
-            error += m_neuralNetwork.calculateError();
+            real_t nnError = m_neuralNetwork.calculateError();
+            error += nnError;
+            curError = nnError / frac->numSequences();
+            if(calcWeightUpdates && Configuration::instance().hybridOnlineBatch())
+                m_curTrainingError = curError;
 
             if (dynamic_cast<layers::BinaryClassificationLayer<TDevice>*>(&m_neuralNetwork.postOutputLayer()))
                 *classError -= (real_t)static_cast<layers::BinaryClassificationLayer<TDevice>&>(m_neuralNetwork.postOutputLayer()).countCorrectClassifications();
@@ -124,8 +133,9 @@ namespace optimizers {
                 }
 
                 // update weights for hybrid online/batch learning
-                if (Configuration::instance().hybridOnlineBatch())
+                if (Configuration::instance().hybridOnlineBatch()) {
                     _updateWeights();
+                }
             }
 
             firstFraction = false;

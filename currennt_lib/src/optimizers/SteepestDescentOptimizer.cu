@@ -71,7 +71,7 @@ namespace optimizers {
         updateWeightFn.momentum     = m_momentum;
 
         for (size_t i = 1; i < this->_neuralNetwork().layers().size()-1; ++i) {
-        	layers::TrainableLayer<TDevice> *layer = dynamic_cast<layers::TrainableLayer<TDevice>*>(this->_neuralNetwork().layers()[i].get());
+            layers::TrainableLayer<TDevice> *layer = dynamic_cast<layers::TrainableLayer<TDevice>*>(this->_neuralNetwork().layers()[i].get());
             if (!layer)
                 continue;
 
@@ -96,7 +96,7 @@ namespace optimizers {
     template <typename TDevice>
     SteepestDescentOptimizer<TDevice>::SteepestDescentOptimizer(
         NeuralNetwork<TDevice> &neuralNetwork, data_sets::DataSet &trainingSet, data_sets::DataSet &validationSet,
-        data_sets::DataSet &testSet, int maxEpochs, int maxEpochsNoBest, int validateEvery, int testEvery, 
+        data_sets::DataSet &testSet, int maxEpochs, int maxEpochsNoBest, int validateEvery, int testEvery,
         real_t learningRate, real_t momentum)
         : Optimizer<TDevice>(neuralNetwork, trainingSet, validationSet, testSet, maxEpochs, maxEpochsNoBest, validateEvery, testEvery)
         , m_learningRate    (learningRate)

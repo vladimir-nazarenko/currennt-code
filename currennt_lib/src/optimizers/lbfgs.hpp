@@ -24,7 +24,8 @@ public:
             int storageSize,
             real_t wolfeStepCoeff,
             real_t wolfeGradCoeff,
-            real_t lineSearchStep
+            real_t lineSearchStep,
+            real_t learnRateForFirstIter
             );
 
     ~Lbfgs();
@@ -47,5 +48,6 @@ private:
     real_t m_wolfeStepCoeff;
     real_t m_wolfeGradCoeff;
     real_t m_lineSearchStep;
+    real_t m_learnRateForFirstIter;
 };
 }

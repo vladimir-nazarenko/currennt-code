@@ -158,6 +158,7 @@ Configuration::Configuration(int argc, const char *argv[])
         ("wolfe_step_coeff",    po::value(&m_wolfeStepCoeff)   ->default_value((real_t)1e-4, "1e-4"),  "sets the wolfe conditions coefficient for line search, performed by l-bfgs optimizer")
         ("wolfe_grad_coeff",    po::value(&m_wolfeGradCoeff)   ->default_value((real_t)0.9, "0.9"),    "sets the wolfe conditions coefficient for line search, performed by l-bfgs optimizer")
         ("line_search_step",    po::value(&m_lineSearchStep)   ->default_value((real_t)2, "2"),        "sets the search step for line search, performed by l-bfgs optimizer")
+        ("learn_rate_for_1st",  po::value(&m_learnRateForFirstIter)->default_value((real_t)1e-5, "1e-5"),"the learning rate to be used as start point in l-bfgs in first iteration")
         ;
 
     po::options_description autosaveOptions("Autosave options");
@@ -482,6 +483,11 @@ real_t Configuration::wolfeGradCoeff() const
 real_t Configuration::lineSearchStep() const
 {
     return m_lineSearchStep;
+}
+
+real_t Configuration::learnRateForFirstIter() const
+{
+    return m_learnRateForFirstIter;
 }
 
 real_t Configuration::momentum() const

@@ -10,13 +10,14 @@ namespace optimizers {
 template <typename TDevice>
 Lbfgs<TDevice>::Lbfgs(NeuralNetwork<TDevice> &neuralNetwork, data_sets::DataSet &trainingSet, data_sets::DataSet &validationSet, data_sets::DataSet &testSet,
                       int maxEpochs, int maxEpochsNoBest, int validateEvery, int testEvery, real_t learningRate,
-                      int storageSize, real_t wolfeStepCoeff, real_t wolfeGradCoeff, real_t lineSearchStep)
+                      int storageSize, real_t wolfeStepCoeff, real_t wolfeGradCoeff, real_t lineSearchStep, real_t learnRateForFirstIter)
     : Optimizer<TDevice>(neuralNetwork, trainingSet, validationSet, testSet, maxEpochs, maxEpochsNoBest, validateEvery, testEvery),
       m_learnRate      (learningRate),
       m_rememberLast   (storageSize),
       m_wolfeStepCoeff (wolfeStepCoeff),
       m_wolfeGradCoeff (wolfeGradCoeff),
-      m_lineSearchStep (lineSearchStep)
+      m_lineSearchStep (lineSearchStep),
+      m_learnRateForFirstIter(learnRateForFirstIter)
 {
     mNumberOfWeights = 0;
     // compute the total number of weights
@@ -152,10 +153,12 @@ void Lbfgs<TDevice>::_updateWeights()
     // d_k = -H_k * g_k
     thrust::transform(hessian_guess_by_gradient.begin(), hessian_guess_by_gradient.end(), mUpdateDirection.begin(), thrust::negate<float>());
 
+    real_t curStep = m_learnRate * m_lineSearchStep;
     // line search
+    if(this->currentEpoch() == 1)
+        curStep = m_learnRateForFirstIter * m_lineSearchStep;
     real_t errorFnValue = this->_curTrainError();
     // multiplication is for the first step
-    real_t curStep = m_learnRate * m_lineSearchStep;
     real_vector newGrad(mDerivatives.size(), 0);
     real_t newError = 0.0f;
     real_t gByD = 0.0f;
@@ -181,6 +184,14 @@ void Lbfgs<TDevice>::_updateWeights()
         // newGradByD = g(x_k + alpha_k * d_k)' * d_k
         newGradByD = thrust::inner_product(mUpdateDirection.begin(), mUpdateDirection.end(), newGrad.begin(), 0.0f);
         // check the Wolfe conditions
+
+//        if(! (newError <= errorFnValue + m_wolfeStepCoeff * curStep * gByD)) {
+//            std::cout << "STEP";
+//        }
+//        if(! (std::fabs(newGradByD) >= -m_wolfeGradCoeff * gByD)){
+//            std::cout << "GRAD(" << newGradByD << ")(" << gByD << ")";
+//        }
+
     } while (!(newError <= errorFnValue + m_wolfeStepCoeff * curStep * gByD &&
              std::fabs(newGradByD) >= -m_wolfeGradCoeff * gByD) && curStep > 0.00001);
 
@@ -195,13 +206,14 @@ void Lbfgs<TDevice>::_updateWeights()
     thrust::transform(s.begin(), s.end(), mWeights.begin(), mWeights.begin(), thrust::plus<float>());
     _writeWeights(mWeights);
 
-//    std::cout << "ALPHA:" << curStep << "\n";
+    std::cout << "ALPHA:" << curStep << "\n";
 
-    if(storage.size() == this->m_rememberLast) {
+    if(storage.size() == this->m_rememberLast && this->m_rememberLast > 0) {
         storage.pop_back();
     }
 
-    storage.insert(storage.begin(), std::make_pair(s, y));
+    if(m_rememberLast > 0)
+        storage.insert(storage.begin(), std::make_pair(s, y));
 }
 
 template class Lbfgs<Cpu>;

@@ -45,6 +45,9 @@ namespace optimizers {
         data_sets::DataSet     &m_validationSet;
         data_sets::DataSet     &m_testSet;
 
+
+        boost::shared_ptr<data_sets::DataSetFraction> m_curDataSetFrac;
+
         const int m_maxEpochs;
         const int m_maxEpochsNoBest;
         const int m_validateEvery;
@@ -96,7 +99,7 @@ namespace optimizers {
             data_sets::DataSet     &trainingSet,
             data_sets::DataSet     &validationSet,
             data_sets::DataSet     &testSet,
-            int maxEpochs, 
+            int maxEpochs,
             int maxEpochsNoBest,
             int validateEvery,
             int testEvery
