@@ -4,6 +4,7 @@
 #include <thrust/inner_product.h>
 #include <stack>
 #include <boost/range/adaptor/reversed.hpp>
+#include "../Configuration.hpp"
 
 namespace optimizers {
 
@@ -76,7 +77,10 @@ void Lbfgs<TDevice>::_readDerivatives(real_vector &output)
         if (!layer)
             continue;
 
-        thrust::copy(this->_curWeightUpdates()[i].begin(), this->_curWeightUpdates()[i].end(), output.begin() + offset);
+        if(Configuration::instance().hybridOnlineBatch())
+            thrust::copy(layer->weightUpdates().begin(), layer->weightUpdates().end(), output.begin() + offset);
+        else
+            thrust::copy(this->_curWeightUpdates()[i].begin(), this->_curWeightUpdates()[i].end(), output.begin() + offset);
         offset += layer->weights().size();
     }
 }
@@ -90,11 +94,10 @@ void Lbfgs<TDevice>::_updateWeights()
         layers::TrainableLayer<TDevice> *layer = dynamic_cast<layers::TrainableLayer<TDevice>*>(this->_neuralNetwork().layers()[i].get());
         if (!layer)
             continue;
-
-        thrust::copy(this->_curWeightUpdates()[i].begin(), this->_curWeightUpdates()[i].end(), mDerivatives.begin() + offset);
         thrust::copy(layer->weights().begin(), layer->weights().end(), mWeights.begin() + offset);
         offset += layer->weights().size();
     }
+    _readDerivatives(mDerivatives);
 
     // compute lbfgs update
     std::stack<real_t> prev_updates_by_gradient;
@@ -129,6 +132,9 @@ void Lbfgs<TDevice>::_updateWeights()
     if(storage.size() > 0) {
         scale_factor = thrust::inner_product((*storage.begin()).first.begin(), (*storage.begin()).first.end(), (*storage.begin()).second.begin(), 0.0f) /
                 thrust::inner_product((*storage.begin()).second.begin(), (*storage.begin()).second.end(), (*storage.begin()).second.begin(), 0.0f);
+//    } else {
+//        scale_factor = 1 /
+//                std::fabs(thrust::inner_product(mDerivatives.begin(), mDerivatives.end(), mDerivatives.begin(), 0.0f));
     }
     // r <- H_K^0 * q
     thrust::transform(gradientUpdateAccumulator.begin(), gradientUpdateAccumulator.end(), thrust::make_constant_iterator(scale_factor),
@@ -155,13 +161,14 @@ void Lbfgs<TDevice>::_updateWeights()
 
     real_t curStep = m_learnRate * m_lineSearchStep;
     // line search
-    if(this->currentEpoch() == 1)
-        curStep = m_learnRateForFirstIter * m_lineSearchStep;
+//    if(this->currentEpoch() == 1)
+//        curStep = m_learnRateForFirstIter * m_lineSearchStep;
     real_t errorFnValue = this->_curTrainError();
     // multiplication is for the first step
     real_vector newGrad(mDerivatives.size(), 0);
     real_t newError = 0.0f;
-    real_t gByD = 0.0f;
+    // gByD = g_k' * d_k
+    real_t gByD = thrust::inner_product(mUpdateDirection.begin(), mUpdateDirection.end(), mDerivatives.begin(), 0.0f);
     real_t newGradByD = 0.0f;
     do {
         curStep /= m_lineSearchStep;
@@ -170,9 +177,6 @@ void Lbfgs<TDevice>::_updateWeights()
         real_vector tmp = mUpdateDirection;
         thrust::transform(tmp.begin(), tmp.end(), thrust::make_constant_iterator(curStep), tmp.begin(), thrust::multiplies<float>());
         thrust::transform(mWeights.begin(), mWeights.end(), tmp.begin(), tmp.begin(), thrust::plus<float>());
-
-        // gByD = g_k' * d_k
-        gByD = thrust::inner_product(mUpdateDirection.begin(), mUpdateDirection.end(), mDerivatives.begin(), 0.0f);
 
         // update weights of neural network
         _writeWeights(tmp);
@@ -186,27 +190,26 @@ void Lbfgs<TDevice>::_updateWeights()
         // check the Wolfe conditions
 
 //        if(! (newError <= errorFnValue + m_wolfeStepCoeff * curStep * gByD)) {
-//            std::cout << "STEP";
+//            std::cout << "STEP(" << newError << ")(" << errorFnValue << ")" << "(" << gByD << ")";
 //        }
 //        if(! (std::fabs(newGradByD) >= -m_wolfeGradCoeff * gByD)){
 //            std::cout << "GRAD(" << newGradByD << ")(" << gByD << ")";
 //        }
 
+
     } while (!(newError <= errorFnValue + m_wolfeStepCoeff * curStep * gByD &&
-             std::fabs(newGradByD) >= -m_wolfeGradCoeff * gByD) && curStep > 0.00001);
+             newGradByD >= m_wolfeGradCoeff * gByD) && curStep > 1e-6);
 
     // s = x_k+1 - x_k; y = g_k+1 - g_k
     real_vector s(mNumberOfWeights, 0);
-
     thrust::transform(mUpdateDirection.begin(), mUpdateDirection.end(), thrust::make_constant_iterator(curStep), s.begin(), thrust::multiplies<float>());
     real_vector y(mNumberOfWeights, 0);
     thrust::transform(newGrad.begin(), newGrad.end(), mDerivatives.begin(), y.begin(), thrust::minus<float>());
 
-    // update the weights of neural network
-    thrust::transform(s.begin(), s.end(), mWeights.begin(), mWeights.begin(), thrust::plus<float>());
-    _writeWeights(mWeights);
+//    m_learnRate = sqrt(curStep);
 
-    std::cout << "ALPHA:" << curStep << "\n";
+
+//    std::cout << "ALPHA:" << curStep << "\n";
 
     if(storage.size() == this->m_rememberLast && this->m_rememberLast > 0) {
         storage.pop_back();
