@@ -25,6 +25,7 @@
 #include "../../currennt_lib/src/layers/LstmLayer.hpp"
 #include "../../currennt_lib/src/layers/BinaryClassificationLayer.hpp"
 #include "../../currennt_lib/src/layers/MulticlassClassificationLayer.hpp"
+#include "../../currennt_lib/src/layers/RNNLayer.hpp"
 #include "../../currennt_lib/src/optimizers/SteepestDescentOptimizer.hpp"
 #include "../../currennt_lib/src/optimizers/lbfgs.hpp"
 #include "../../currennt_lib/src/helpers/JsonClasses.hpp"
@@ -187,7 +188,7 @@ int trainerMain(const Configuration &config)
                 opt_ptr.reset(optimizer);
                 break;
 
-            case Configuration::OPTIMIZER_BFGS:
+            case Configuration::OPTIMIZER_LBFGS:
                 optimizer = new optimizers::Lbfgs<TDevice>(
                             neuralNetwork, *trainingSet, *validationSet, *testSet,
                             config.maxEpochs(), config.maxEpochsNoBest(), config.validateEvery(), config.testEvery(),
@@ -664,6 +665,10 @@ void printLayers(const NeuralNetwork<TDevice> &nn)
         if (tl) {
             printf(", bias: %.1lf, weights: %d", (double)tl->bias(), (int)tl->weights().size());
             weights += (int)tl->weights().size();
+            const layers::RNNLayer<TDevice>* rnn = dynamic_cast<const layers::RNNLayer<TDevice>*>(nn.layers()[i].get());
+            if (rnn) {
+                printf(", gradient threshold: %d", rnn->gradientThreshold());
+            }
         }
 
         printf("]\n");
@@ -684,6 +689,17 @@ void printOptimizer(const Configuration &config, const optimizers::Optimizer<TDe
         printf("Test error every:          %d\n", config.testEvery());
         printf("Learning rate:             %g\n", (double)config.learningRate());
         printf("Momentum:                  %g\n", (double)config.momentum());
+        printf("\n");
+    } else if (dynamic_cast<const optimizers::Lbfgs<TDevice>*>(&optimizer)) {
+        printf("Optimizer type: Limited memory BFGS\n");
+        printf("Max training epochs:       %d\n", config.maxEpochs());
+        printf("Max epochs until new best: %d\n", config.maxEpochsNoBest());
+        printf("Validation error every:    %d\n", config.validateEvery());
+        printf("Test error every:          %d\n", config.testEvery());
+        printf("Storage size:              %g\n", (double)config.storageSize());
+        printf("Wolfe gradient coeff.:     %g\n", (double)config.wolfeGradCoeff());
+        printf("Wolfe step coeff.:         %g\n", (double)config.wolfeStepCoeff());
+        printf("Line search step:          %g\n", (double)config.lineSearchStep());
         printf("\n");
     }
 }

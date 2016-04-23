@@ -30,6 +30,7 @@
 #include <limits>
 
 #include <thrust/transform.h>
+#include <thrust/inner_product.h>
 
 
 namespace optimizers {
@@ -126,6 +127,8 @@ namespace optimizers {
                         thrust::transform(layer->weightUpdates().begin(), layer->weightUpdates().end(), m_curWeightUpdates[i].begin(), m_curWeightUpdates[i].begin(), thrust::plus<real_t>());
                     else
                         thrust::copy(layer->weightUpdates().begin(), layer->weightUpdates().end(), m_curWeightUpdates[i].begin());
+
+//                    std::cout << "gradNorm(" << thrust::inner_product(layer->weightUpdates().begin(), layer->weightUpdates().end(), layer->weightUpdates().begin(), 0.0f) << ")";
 
                     // restore old weights before update in case of weight noise
                     if (Configuration::instance().weightNoiseSigma() > 0.0)

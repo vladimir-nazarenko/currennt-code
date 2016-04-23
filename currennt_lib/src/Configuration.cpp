@@ -272,7 +272,7 @@ Configuration::Configuration(int argc, const char *argv[])
     else if (optimizerString == "steepest_descent")
         m_optimizer = OPTIMIZER_STEEPESTDESCENT;
     else if (optimizerString == "lbfgs")
-        m_optimizer = OPTIMIZER_BFGS;
+        m_optimizer = OPTIMIZER_LBFGS;
     else {
         std::cout << "ERROR: Invalid optimizer. Possible values: steepest_descent, rprop, lbfgs." << std::endl;
         exit(1);

@@ -4,7 +4,7 @@
 #include "../helpers/getRawPointer.cuh"
 #include "../helpers/limitedError.cuh"
 #include <thrust/iterator/constant_iterator.h>
-//#include <thrust/random.h>
+#include <thrust/inner_product.h>
 
 
 namespace internal {
@@ -82,7 +82,6 @@ namespace {
 
     /**
      * Computes the derivatives of the outputs
-     * Not sure if it's crrect
      */
     struct ComputeBlockErrorsFn
     {
@@ -273,7 +272,10 @@ RNNLayer<TDevice>::RNNLayer(const helpers::JsonValue &layerChild, const helpers:
     : TrainableLayer<TDevice>(layerChild, weightsSection, 1 /* ls biases stored here */
                                                         , helpers::safeJsonGetInt(layerChild, "size") / (bidirectional ? 2 : 1)
                                                         , precedingLayer),
-      m_isBidirectional(bidirectional)
+      m_isBidirectional(bidirectional),
+      m_gradThreshold(helpers::safeJsonGetInt(layerChild, "grad_threshold") > 0 ?
+                          helpers::safeJsonGetInt(layerChild, "grad_threshold") :
+                          1e6)
 {
 
     if (m_isBidirectional && this->size() % 2 != 0)
@@ -350,6 +352,11 @@ const std::string &RNNLayer<TDevice>::type() const
     return (m_isBidirectional ? sb : su);
 }
 
+template <typename TDevice>
+int RNNLayer<TDevice>::gradientThreshold() const
+{
+    return m_gradThreshold;
+}
 
 template <typename TDevice>
 void RNNLayer<TDevice>::loadSequences(const data_sets::DataSetFraction &fraction)
@@ -587,6 +594,18 @@ void RNNLayer<TDevice>::computeBackwardPass() {
     if (!m_isBidirectional) {
         this->outputErrors().swap(m_fw.tmpErrors);
         this->_outputs()    .swap(m_fw.tmpOutputs);
+    }
+
+    real_t gradNorm = thrust::inner_product(this->weightUpdates().begin(),
+                                            this->weightUpdates().end(),
+                                            this->weightUpdates().begin(),
+                                            0.0f);
+    if(gradNorm > m_gradThreshold) {
+        thrust::transform(this->_weightUpdates().begin(),
+                          this->_weightUpdates().end(),
+                          thrust::make_constant_iterator(m_gradThreshold / gradNorm),
+                          this->_weightUpdates().begin(),
+                          thrust::multiplies<float>());
     }
 }
 

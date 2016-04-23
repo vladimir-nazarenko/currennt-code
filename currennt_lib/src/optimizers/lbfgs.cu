@@ -190,15 +190,15 @@ void Lbfgs<TDevice>::_updateWeights()
         // check the Wolfe conditions
 
 //        if(! (newError <= errorFnValue + m_wolfeStepCoeff * curStep * gByD)) {
-//            std::cout << "STEP(" << newError << ")(" << errorFnValue << ")" << "(" << gByD << ")";
+//            std::cout << "STEP";
 //        }
-//        if(! (std::fabs(newGradByD) >= -m_wolfeGradCoeff * gByD)){
-//            std::cout << "GRAD(" << newGradByD << ")(" << gByD << ")";
+//        if(! (newGradByD >= m_wolfeGradCoeff * gByD)){
+//            std::cout << "grad";
 //        }
 
 
     } while (!(newError <= errorFnValue + m_wolfeStepCoeff * curStep * gByD &&
-             newGradByD >= m_wolfeGradCoeff * gByD) && curStep > 1e-6);
+             newGradByD >= m_wolfeGradCoeff * gByD) && curStep > 1e-5);
 
     // s = x_k+1 - x_k; y = g_k+1 - g_k
     real_vector s(mNumberOfWeights, 0);

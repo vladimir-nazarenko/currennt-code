@@ -63,6 +63,8 @@ namespace layers {
         /**
          * Sets the values of local variables, inits activation matrices
          */
+
+        int gradientThreshold() const;
         void loadSequences(const data_sets::DataSetFraction &fraction);
         void computeForwardPass();
         void computeBackwardPass();
@@ -72,6 +74,7 @@ namespace layers {
     private:
         forward_backward_info_t m_fw;
         forward_backward_info_t m_bw;
+        real_t m_gradThreshold;
         helpers::Matrix<TDevice> m_precedingLayerOutputMatrix;
         bool m_isBidirectional;
         real_t *_rawBiasWeights;

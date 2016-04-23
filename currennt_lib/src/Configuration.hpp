@@ -36,7 +36,7 @@ class Configuration
 public:
     enum optimizer_type_t {
         OPTIMIZER_STEEPESTDESCENT,
-        OPTIMIZER_BFGS,
+        OPTIMIZER_LBFGS,
         OPTIMIZER_RPROP
     };
 
